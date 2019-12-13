@@ -12,9 +12,11 @@ import os
 import numpy as np
 from numba import njit
 from numba_neighbors.benchmark_utils import run_benchmarks, benchmark
-from numba_neighbors import kdtree as kd
+from numba_neighbors import kd_tree as kd
 from dcbs.sparse.sample import ragged_in_place_and_down_sample_query_np
 import functools
+import heapq
+heapq.heappush
 
 N = 1024
 max_sample_size = 512
@@ -29,9 +31,17 @@ data = np.random.uniform(size=(N, D)).astype(kd.FLOAT_TYPE)
 data /= np.linalg.norm(data, axis=-1, keepdims=True)
 
 
-@njit()
-def numba_impl(data, leaf_size):
+@benchmark('numba')
+def numba_impl():
     tree = kd.KDTree(data, leaf_size)
+    return tree.rejection_sample_query(rejection_r**2, query_r**2,
+                                       tree.get_node_indices(), max_sample_size,
+                                       max_neighbors)
+
+
+@benchmark('numba3')
+def numba3_impl():
+    tree = kd.KDTree3(data, leaf_size)
     return tree.rejection_sample_query(rejection_r**2, query_r**2,
                                        tree.get_node_indices(), max_sample_size,
                                        max_neighbors)
@@ -44,11 +54,8 @@ def separate():
                                              query_r, max_neighbors)
 
 
-sample_result, query_result = numba_impl(data, leaf_size)
-benchmark('numba_impl')(functools.partial(numba_impl,
-                                          data=data,
-                                          leaf_size=leaf_size))
 run_benchmarks(20, 100)
+sample_result, query_result = numba_impl()
 
 count = sample_result.count
 print(count)

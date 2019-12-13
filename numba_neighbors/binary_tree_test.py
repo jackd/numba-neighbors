@@ -9,6 +9,7 @@ from numba_neighbors import binary_tree as bt
 
 
 class BinaryTreeTest(unittest.TestCase):
+
     def test_simultaneous_sort(self):
         np.random.seed(123)
         N = 8
@@ -24,8 +25,22 @@ class BinaryTreeTest(unittest.TestCase):
         np.testing.assert_allclose(dist, expected_dist)
         np.testing.assert_equal(idx, expected_idx)
 
+    def test_permute_tree(self):
+        N = 1024
+        data = np.random.uniform(size=(N, 3))
 
+        idx_array = np.arange(N)
+        np.random.shuffle(idx_array)
 
+        perm = np.arange(N)
+        np.random.shuffle(perm)
+
+        permuted_data, permuted_idx_array = bt.permute_tree(
+            data, idx_array, perm)
+
+        actual = permuted_data[permuted_idx_array]
+        expected = data[idx_array]
+        np.testing.assert_equal(actual, expected)
 
 
 if __name__ == '__main__':

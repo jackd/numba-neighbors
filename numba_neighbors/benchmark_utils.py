@@ -26,8 +26,9 @@ def run_benchmarks(burn_iters, num_iters, *names_and_fns):
 
 class BenchmarkManager(object):
 
-    def __init__(self):
+    def __init__(self, name='default'):
         self.names_and_fns = []
+        self.name = name
 
     def benchmark(self, name=None):
 
@@ -39,6 +40,7 @@ class BenchmarkManager(object):
         return f
 
     def run_benchmarks(self, burn_iters, num_iters):
+        print('Running {} benchmarks...'.format(self.name))
         run_benchmarks(burn_iters, num_iters, *self.names_and_fns)
 
 

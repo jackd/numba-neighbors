@@ -10,7 +10,7 @@ import os
 
 os.environ['NUMBA_DISABLE_JIT'] = '1'
 import numpy as np
-from numba_neighbors import kdtree as kd
+from numba_neighbors import kd_tree as kd
 import matplotlib.pyplot as plt
 
 N = 1024

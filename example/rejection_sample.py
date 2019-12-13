@@ -10,7 +10,7 @@ import os
 
 # os.environ['NUMBA_DISABLE_JIT'] = '1'
 import numpy as np
-from numba_neighbors import kdtree as kd
+from numba_neighbors import kd_tree as kd
 import matplotlib.pyplot as plt
 
 N = 1024
@@ -28,7 +28,7 @@ data = np.random.uniform(size=(N, D)).astype(kd.FLOAT_TYPE)
 
 tree = kd.KDTree(data, leaf_size=leaf_size)
 sample_result, query_result = tree.rejection_sample_query(
-    rejection_r, query_r, tree.get_node_indices(), n, max_neighbors)
+    rejection_r**2, query_r**2, tree.get_node_indices(), n, max_neighbors)
 print(np.max(query_result.counts))
 print(sample_result.count)
 
@@ -36,7 +36,7 @@ print(sample_result.count)
 def vis(x0,
         sample_indices,
         small_balls=True,
-        big_balls=True,
+        big_balls=False,
         labels=False,
         aspect=1):
     x1 = x0[sample_indices]

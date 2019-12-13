@@ -12,15 +12,16 @@ import os
 import numpy as np
 from numba import njit
 from numba_neighbors.benchmark_utils import run_benchmarks, benchmark
-from numba_neighbors import kdtree as kd
+from numba_neighbors import kd_tree as kd
 from dcbs.core.sample import ifp_sample_and_query_np
 import functools
 
 N = 1024
 sample_size = 512
 D = 3
+rejection_r = 0.2
 query_r = 0.2
-max_neighbors = 192
+max_neighbors = 256
 leaf_size = 32
 
 np.random.seed(124)
@@ -38,8 +39,24 @@ def ifp():
 @benchmark()
 def rejection_ifp():
     tree = kd.KDTree(data, leaf_size)
-    return tree.rejection_ifp_sample_query(query_r**2, tree.get_node_indices(),
-                                           sample_size, max_neighbors)
+    return tree.rejection_ifp_sample_query(rejection_r**2, query_r**2,
+                                           tree.get_node_indices(), sample_size,
+                                           max_neighbors)
+
+
+@benchmark()
+def ifp3():
+    tree = kd.KDTree3(data, leaf_size)
+    return tree.ifp_sample_query(query_r**2, tree.get_node_indices(),
+                                 sample_size, max_neighbors)
+
+
+@benchmark()
+def rejection_ifp3():
+    tree = kd.KDTree3(data, leaf_size)
+    return tree.rejection_ifp_sample_query(rejection_r**2, query_r**2,
+                                           tree.get_node_indices(), sample_size,
+                                           max_neighbors)
 
 
 @benchmark()
