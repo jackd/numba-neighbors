@@ -100,7 +100,7 @@ def rdist(x, y):
 
 
 @nb.njit(inline='always', fastmath=FASTMATH)
-def min_max_rdist3(node_data, x: FloatArray):
+def min_max_rdist3(node_data: FloatArray, x: FloatArray):
     """min_max_rdist implementation optimized for 3D arrays."""
     lower_bounds = node_data[0]
     upper_bounds = node_data[1]

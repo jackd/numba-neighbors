@@ -13,7 +13,7 @@ import numpy as np
 from numba import njit
 from numba_neighbors.benchmark_utils import run_benchmarks, benchmark
 from numba_neighbors import kd_tree as kd
-from dcbs.core.sample import ifp_sample_and_query_np
+from dcbs.np_utils.ifp.sample_query import ifp_sample_and_query
 import functools
 
 N = 1024
@@ -22,7 +22,7 @@ D = 3
 rejection_r = 0.2
 query_r = 0.2
 max_neighbors = 256
-leaf_size = 32
+leaf_size = 64
 
 np.random.seed(124)
 data = np.random.uniform(size=(N, D)).astype(kd.FLOAT_TYPE)
@@ -61,7 +61,7 @@ def rejection_ifp3():
 
 @benchmark()
 def base():
-    return ifp_sample_and_query_np(data, query_r, sample_size, max_neighbors,
+    return ifp_sample_and_query(data, query_r, sample_size, max_neighbors,
                                    max_neighbors)
 
 

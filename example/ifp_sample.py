@@ -6,9 +6,9 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import os
-
+# import os
 # os.environ['NUMBA_DISABLE_JIT'] = '1'
+
 import numpy as np
 from numba_neighbors import kd_tree as kd
 import matplotlib.pyplot as plt
@@ -21,26 +21,31 @@ query_r = 0.1
 max_neighbors = 64
 leaf_size = 16
 
+r2 = query_r**2
+
 np.random.seed(124)
 data = np.random.uniform(size=(N, D)).astype(kd.FLOAT_TYPE)
 
 tree = kd.KDTree(data, leaf_size=leaf_size)
-sample_result, query_result = tree.ifp_sample_query(query_r**2,
-                                                    tree.get_node_indices(), n,
-                                                    max_neighbors)
-print(np.max(query_result.counts))
-print(sample_result.min_dist, np.max(sample_result.min_dists))
+sample_result, query_result = tree.ifp_sample_query(r2, tree.get_node_indices(),
+                                                    n, max_neighbors)
+sample_result, query_result = tree.rejection_ifp_sample_query(
+    r2, r2, tree.get_node_indices(), n, max_neighbors)
 
 
 def vis(x0,
         sample_indices,
-        small_balls=True,
+        query_result,
+        small_balls=False,
         big_balls=False,
         labels=False,
         aspect=1):
     x1 = x0[sample_indices]
+    xn = x0[query_result.indices[0, :query_result.counts[0]]]
+    x10 = x1[0]
     x0 = x0.T
     x1 = x1.T
+    xn = xn.T
 
     plt.axes([0, 0, 1, 1])
     ax = plt.gca()
@@ -62,9 +67,13 @@ def vis(x0,
 
     ax.scatter(*x0, c='blue', alpha=0.5, s=10)
     ax.scatter(*x1, c='red', alpha=1, s=10)
+    ax.scatter(*xn, c='green', alpha=1, s=10)
+    ax.scatter(*x10, c='black', alpha=1, s=10)
+    ax.add_patch(
+        plt.Circle(x10, radius=query_r, alpha=0.15, fill=1, color='green'))
     ax.axis('off')
     ax.set_aspect(1)
 
 
-vis(data, sample_result.indices)
+vis(data, sample_result.indices, query_result)
 plt.show()

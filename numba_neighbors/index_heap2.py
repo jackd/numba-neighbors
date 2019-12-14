@@ -1,3 +1,9 @@
+"""
+IndexHeap implementation that uses all non-class functions.
+
+Significantly slower than index_heap implementation, but I'll leave it here
+so when I think maybe I can make it faster by doing this I'll know I'm wrong.
+"""
 from typing import Tuple, NamedTuple
 import numpy as np
 from numba import jitclass, njit
@@ -91,7 +97,8 @@ def _siftup(pos, priorities, indices, length):
     while childpos < endpos:
         # Set childpos to index of smaller child.
         rightpos = childpos + 1
-        if rightpos < endpos and not priorities[childpos] < priorities[rightpos]:
+        if (rightpos < endpos and
+                not priorities[childpos] < priorities[rightpos]):
             childpos = rightpos
         # Move the smaller child up.
         _replaceitem(pos, childpos, priorities, indices)

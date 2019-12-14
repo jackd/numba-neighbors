@@ -58,7 +58,7 @@ def numba_impl(data, leaf_size, n1, r0, r1, max_neigh0, max_neigh1):
     query0 = tree.query_radius_bottom_up(data, r0**2, start_nodes, max_neigh0)
 
     sample = bt.rejection_sample_precomputed(query0.indices, query0.counts, n1,
-                                             n0, tree.int_type, tree.bool_type)
+                                             tree.int_type, tree.bool_type)
     sample_indices = sample.indices[:sample.count]
     query1 = tree.query_radius_bottom_up(data[sample_indices], r1**2,
                                          start_nodes[sample_indices],
@@ -78,7 +78,7 @@ def numba3_impl(data, leaf_size, n1, r0, r1, max_neigh0, max_neigh1):
     query0 = tree.query_radius_bottom_up(data, r0**2, start_nodes, max_neigh0)
 
     sample = bt.rejection_sample_precomputed(query0.indices, query0.counts, n1,
-                                             n0, tree.int_type, tree.bool_type)
+                                             tree.int_type, tree.bool_type)
     sample_indices = sample.indices[:sample.count]
     query1 = tree.query_radius_bottom_up(data[sample_indices], r1**2,
                                          start_nodes[sample_indices],

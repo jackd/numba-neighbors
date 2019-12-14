@@ -31,21 +31,18 @@ class KDTreeTest(unittest.TestCase):
     #     actual = kd.get_tree_data(data, leaf_size=leaf_size)
     #     expected = sk_KDTree(data, leaf_size=leaf_size)
 
-    #     np.testing.assert_equal(actual.n_features, D)
-    #     np.testing.assert_equal(actual.n_samples, N)
-    #     np.testing.assert_equal(actual.leaf_size, leaf_size)
-    # np.testing.assert_equal(actual.n_nodes, len(expected.node_data))
+    #     np.testing.assert_equal(actual.n_nodes, len(expected.node_data))
 
-    # np.testing.assert_equal(actual.idx_array, expected.idx_array)
-    # np.testing.assert_allclose(actual.node_bounds, expected.node_bounds)
-    # np.testing.assert_equal(actual.idx_start,
-    #                         [nd['idx_start'] for nd in expected.node_data])
-    # np.testing.assert_equal(actual.idx_end,
-    #                         [nd['idx_end'] for nd in expected.node_data])
-    # np.testing.assert_equal(actual.is_leaf,
-    #                         [nd['is_leaf'] for nd in expected.node_data])
-    # np.testing.assert_allclose(actual.radius,
-    #                            [nd['radius'] for nd in expected.node_data])
+    #     np.testing.assert_equal(actual.idx_array, expected.idx_array)
+    #     np.testing.assert_allclose(actual.node_bounds, expected.node_bounds)
+    #     np.testing.assert_equal(actual.idx_start,
+    #                             [nd['idx_start'] for nd in expected.node_data])
+    #     np.testing.assert_equal(actual.idx_end,
+    #                             [nd['idx_end'] for nd in expected.node_data])
+    #     np.testing.assert_equal(actual.is_leaf,
+    #                             [nd['is_leaf'] for nd in expected.node_data])
+    #     np.testing.assert_allclose(actual.radius,
+    #                             [nd['radius'] for nd in expected.node_data])
 
     def test_query_consistent(self):
         np.random.seed(123)
@@ -90,7 +87,7 @@ class KDTreeTest(unittest.TestCase):
         np.random.seed(124)
         N = 1024
         n = 256
-        D = 3
+        D = self.num_dims
         r = 0.1
         r2 = r * r
         max_neighbors = 32
@@ -128,6 +125,36 @@ class KDTreeTest(unittest.TestCase):
         np.testing.assert_equal(np.sum(counts), np.sum(expected_counts))
         np.testing.assert_equal(flat_indices, expected_indices)
         np.testing.assert_allclose(np.sqrt(flat_dists), expected_dists)
+
+    # def test_ifp_sample_consistent(self):
+    #     np.random.seed(124)
+    #     N = 1024
+    #     sample_size = 256
+    #     D = self.num_dims
+    #     r = 0.2
+    #     r2 = r * r
+
+    #     max_neighbors = 256
+    #     leaf_size = 16
+
+    #     data = np.random.uniform(size=(N, D)).astype(np.float32)
+    #     data /= np.linalg.norm(data, axis=-1, keepdims=True)
+
+    #     numba_tree = self.tree(data, leaf_size=leaf_size)
+    #     start_indices = numba_tree.get_node_indices()
+    #     sr, qr = numba_tree.ifp_sample_query(r2, start_indices, sample_size,
+    #                                          max_neighbors)
+
+    #     sr2, qr2 = numba_tree.rejection_ifp_sample_query(
+    #         r2, r2, start_indices, sample_size, max_neighbors)
+
+    #     np.testing.assert_equal(sr.indices, sr2.indices)
+    #     np.testing.assert_allclose(sr.min_dists, sr2.min_dists)
+    #     np.testing.assert_allclose(sr.min_dist, sr2.min_dist)
+
+    #     np.testing.assert_allclose(qr.dists, qr2.dists)
+    #     np.testing.assert_equal(qr.indices, qr2.indices)
+    #     np.testing.assert_equal(qr.counts, qr2.counts)
 
 
 class KDTree3Test(KDTreeTest):
