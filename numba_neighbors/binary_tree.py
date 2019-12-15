@@ -664,15 +664,15 @@ def ifp_sample_precomputed(dists: FloatArray,
                            query_indices: IntArray,
                            counts: IntArray,
                            sample_size: int,
-                           eps=1e-8):
+                           eps=1e-8) -> IFPSampleResult:
     in_size, max_counts = dists.shape
     int_type = query_indices.dtype
     sample_indices = np.empty((sample_size,), dtype=int_type)
-    min_dists = np.full((in_size,), np.inf, dtype=np.float32)
-    _update_min_dists(dists, query_indices, counts, in_size, min_dists)
+    min_dists = np.full((in_size,), -np.inf, dtype=np.float32)
     heap = ih.padded_index_heap(min_dists, arange(in_size, dtype=int_type),
                                 sample_size * max_counts + in_size)
-    heap.heapify()
+    min_dists *= -1
+
     min_dist = ifp_sample_precomputed_prealloc(dists,
                                                query_indices,
                                                counts,
@@ -680,7 +680,7 @@ def ifp_sample_precomputed(dists: FloatArray,
                                                min_dists,
                                                heap,
                                                eps=eps)
-    return IFPSampleQueryResult(sample_indices, min_dists, min_dist)
+    return IFPSampleResult(sample_indices, min_dists, min_dist)
 
 
 @nb.njit(fastmath=True)
@@ -692,19 +692,19 @@ def rejection_ifp_sample_precomputed_prealloc(
         sample_indices: IntArray,
         min_dists: FloatArray,
         consumed: BoolArray,
-        eps: float = 1e-8):
+        eps: float = 1e-8) -> float:
     in_size, max_counts = dists.shape
     count = rejection_sample_precomputed_prealloc(query_indices, counts,
                                                   sample_indices, consumed)
     si = sample_indices[:count]
     _update_min_dists(dists[si], query_indices[si], counts[si], count,
                       min_dists)
-
+    min_dists *= -1
     heap = ih.padded_index_heap(min_dists,
                                 arange(in_size, dtype=sample_indices.dtype),
                                 sample_indices.size * max_counts + in_size)
     heap.heapify()
-
+    min_dists *= -1
     min_dist = ifp_sample_precomputed_prealloc(dists, query_indices, counts,
                                                sample_indices[count:],
                                                min_dists, heap, eps)
@@ -1448,7 +1448,8 @@ class BinaryTree(object):
                                start_nodes: IntArray, max_count: int):
         n_queries = X.shape[0]
         dists = np.full((n_queries, max_count), np.inf, dtype=self.float_type)
-        indices = np.zeros((n_queries, max_count), dtype=self.int_type)
+        indices = np.full(
+            (n_queries, max_count), self.n_data, dtype=self.int_type)
         counts = np.zeros((n_queries,), dtype=self.int_type)
         self.query_radius_bottom_up_prealloc(X, r, start_nodes, dists, indices,
                                              counts)

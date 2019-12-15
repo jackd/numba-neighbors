@@ -80,6 +80,16 @@ def _arr_pop(self) -> Tuple:
 
 
 @njit(inline='always')
+def _less(self, i1: int, i2: int) -> bool:
+    left = self.priorities[i1]
+    right = self.priorities[i2]
+    if left == right:
+        return self.indices[i1] < self.indices[i2]
+    else:
+        return left < right
+
+
+@njit(inline='always')
 def _siftup(self, pos):
     endpos = self.length
     startpos = pos
@@ -89,8 +99,7 @@ def _siftup(self, pos):
     while childpos < endpos:
         # Set childpos to index of smaller child.
         rightpos = childpos + 1
-        if rightpos < endpos and not self.priorities[
-                childpos] < self.priorities[rightpos]:
+        if rightpos < endpos and not _less(self, childpos, rightpos):
             childpos = rightpos
         # Move the smaller child up.
         _replaceitem(self, pos, childpos)

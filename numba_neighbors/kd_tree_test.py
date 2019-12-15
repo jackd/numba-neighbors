@@ -8,7 +8,7 @@ from __future__ import print_function
 import numpy as np
 import unittest
 from numba_neighbors import kd_tree as kd
-from numba_neighbors.binary_tree import simultaneous_sort_partial
+from numba_neighbors import binary_tree as bt
 from sklearn.neighbors import KDTree as sk_KDTree
 
 
@@ -73,7 +73,7 @@ class KDTreeTest(unittest.TestCase):
 
         numba_tree.query_radius_prealloc(X, r2, dists, indices, counts)
 
-        simultaneous_sort_partial(dists, indices, counts)
+        bt.simultaneous_sort_partial(dists, indices, counts)
         mask = np.tile(np.expand_dims(np.arange(max_neighbors), 0),
                        (n, 1)) < np.expand_dims(counts, axis=1)
         flat_dists = dists[mask]
@@ -116,7 +116,7 @@ class KDTreeTest(unittest.TestCase):
         numba_tree.query_radius_bottom_up_prealloc(X, r2, start_nodes, dists,
                                                    indices, counts)
 
-        simultaneous_sort_partial(dists, indices, counts)
+        bt.simultaneous_sort_partial(dists, indices, counts)
         mask = np.tile(np.expand_dims(np.arange(max_neighbors), 0),
                        (n, 1)) < np.expand_dims(counts, axis=1)
         flat_dists = dists[mask]
@@ -126,35 +126,62 @@ class KDTreeTest(unittest.TestCase):
         np.testing.assert_equal(flat_indices, expected_indices)
         np.testing.assert_allclose(np.sqrt(flat_dists), expected_dists)
 
-    # def test_ifp_sample_consistent(self):
-    #     np.random.seed(124)
-    #     N = 1024
-    #     sample_size = 256
-    #     D = self.num_dims
-    #     r = 0.2
-    #     r2 = r * r
+    def test_ifp_sample_consistent(self):
+        np.random.seed(124)
+        N = 1024
+        sample_size = 256
+        D = self.num_dims
+        r = 0.2
+        r2 = r * r
 
-    #     max_neighbors = 256
-    #     leaf_size = 16
+        max_neighbors = 256
+        leaf_size = 16
 
-    #     data = np.random.uniform(size=(N, D)).astype(np.float32)
-    #     data /= np.linalg.norm(data, axis=-1, keepdims=True)
+        data = np.random.uniform(size=(N, D)).astype(np.float32)
+        data /= np.linalg.norm(data, axis=-1, keepdims=True)
 
-    #     numba_tree = self.tree(data, leaf_size=leaf_size)
-    #     start_indices = numba_tree.get_node_indices()
-    #     sr, qr = numba_tree.ifp_sample_query(r2, start_indices, sample_size,
-    #                                          max_neighbors)
+        numba_tree = self.tree(data, leaf_size=leaf_size)
+        start_indices = numba_tree.get_node_indices()
+        sr, qr = numba_tree.ifp_sample_query(r2, start_indices, sample_size,
+                                             max_neighbors)
 
-    #     sr2, qr2 = numba_tree.rejection_ifp_sample_query(
-    #         r2, r2, start_indices, sample_size, max_neighbors)
+        sr2, qr2 = numba_tree.rejection_ifp_sample_query(
+            r2, r2, start_indices, sample_size, max_neighbors)
 
-    #     np.testing.assert_equal(sr.indices, sr2.indices)
-    #     np.testing.assert_allclose(sr.min_dists, sr2.min_dists)
-    #     np.testing.assert_allclose(sr.min_dist, sr2.min_dist)
+        np.testing.assert_equal(sr.indices, sr2.indices)
+        np.testing.assert_allclose(sr.min_dists, sr2.min_dists)
+        np.testing.assert_allclose(sr.min_dist, sr2.min_dist)
 
-    #     np.testing.assert_allclose(qr.dists, qr2.dists)
-    #     np.testing.assert_equal(qr.indices, qr2.indices)
-    #     np.testing.assert_equal(qr.counts, qr2.counts)
+        np.testing.assert_allclose(qr.dists, qr2.dists)
+        np.testing.assert_equal(qr.indices, qr2.indices)
+        np.testing.assert_equal(qr.counts, qr2.counts)
+
+        dists, indices, counts = numba_tree.query_radius_bottom_up(
+            data, r2, start_indices, max_neighbors)
+        sr3 = bt.ifp_sample_precomputed(dists, indices, counts, sample_size)
+
+        sr4 = bt.rejection_ifp_sample_precomputed(dists, indices, counts,
+                                                  sample_size)
+
+        # compare sr3 / sr4
+        np.testing.assert_allclose(sr3.min_dists, sr4.min_dists)
+        np.testing.assert_allclose(sr3.min_dist, sr4.min_dist)
+        np.testing.assert_equal(sr3.indices, sr4.indices)
+
+        # compare sr3 / sr
+
+        si = sr3.indices
+        dists = dists[si]
+        indices = indices[si]
+        counts = counts[si]
+
+        np.testing.assert_allclose(qr.dists, dists)
+        np.testing.assert_equal(qr.indices, indices)
+        np.testing.assert_equal(qr.counts, counts)
+
+        np.testing.assert_equal(sr.indices, sr3.indices)
+        np.testing.assert_allclose(sr.min_dists, sr3.min_dists)
+        np.testing.assert_allclose(sr.min_dist, sr3.min_dist)
 
 
 class KDTree3Test(KDTreeTest):
