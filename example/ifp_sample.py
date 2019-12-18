@@ -6,8 +6,8 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-# import os
-# os.environ['NUMBA_DISABLE_JIT'] = '1'
+import os
+os.environ['NUMBA_DISABLE_JIT'] = '1'
 
 import numpy as np
 from numba_neighbors import kd_tree as kd
@@ -36,7 +36,7 @@ sample_result, query_result = tree.rejection_ifp_sample_query(
 def vis(x0,
         sample_indices,
         query_result,
-        small_balls=False,
+        small_balls=True,
         big_balls=False,
         labels=False,
         aspect=1):

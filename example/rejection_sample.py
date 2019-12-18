@@ -7,8 +7,8 @@ from __future__ import division
 from __future__ import print_function
 
 import os
+os.environ['NUMBA_DISABLE_JIT'] = '1'
 
-# os.environ['NUMBA_DISABLE_JIT'] = '1'
 import numpy as np
 from numba_neighbors import kd_tree as kd
 import matplotlib.pyplot as plt
@@ -36,7 +36,7 @@ print(sample_result.count)
 def vis(x0,
         sample_indices,
         small_balls=True,
-        big_balls=False,
+        big_balls=True,
         labels=False,
         aspect=1):
     x1 = x0[sample_indices]

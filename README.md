@@ -27,7 +27,7 @@ conda install -c numba icc_rt
 
 1. All operations are done using reduced distances. E.g. provided `KDTree` implementations use squared distances rather than actual distances both for inputs and outputs.
 2. `query_radius`-like functions must specify a maximum number of neighbors. Over-estimating this is fairly cheap - it just means we allocate more data than necessary - but if the limit is reached the first `max_count` neighbors that are found are returned. These aren't necessarily the closest `max_count` neighbors.
-3. Query outputs aren't sorted, though can be using `binary_tree.partial_simultaneous_sort`.
+3. Query outputs aren't sorted, though can be using `binary_tree.simultaneous_sort_partial`.
 4. Use of Interl's short vector math library (SVML) if instaled. This makes computation faster, but may result in very small errors.
 
 ## TODO

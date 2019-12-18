@@ -163,7 +163,7 @@ class KDTreeTest(unittest.TestCase):
         sr4 = bt.rejection_ifp_sample_precomputed(dists, indices, counts,
                                                   sample_size)
 
-        # compare sr3 / sr4
+        # # compare sr3 / sr4
         np.testing.assert_allclose(sr3.min_dists, sr4.min_dists)
         np.testing.assert_allclose(sr3.min_dist, sr4.min_dist)
         np.testing.assert_equal(sr3.indices, sr4.indices)

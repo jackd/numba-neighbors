@@ -14,8 +14,9 @@ from numba_neighbors.binary_tree import FLOAT_TYPE, INT_TYPE, BOOL_TYPE
 from numba_neighbors.binary_tree import FLOAT_TYPE_T, INT_TYPE_T, BOOL_TYPE_T
 from numba_neighbors.binary_tree import FloatArray, IntArray, BoolArray
 from numba_neighbors.binary_tree import FASTMATH
+from numba_neighbors.binary_tree import PARALLEL
 
-# @nb.njit(parallel=True, fastmath=FASTMATH)
+# @nb.njit(parallel=PARALLEL, fastmath=FASTMATH)
 # def _update_node_radii(n_features, n_nodes, radius, node_lower_bounds,
 #                        node_upper_bounds):
 
@@ -34,27 +35,55 @@ from numba_neighbors.binary_tree import FASTMATH
 #         radius[i_node] = rad
 
 
-@nb.njit(parallel=True, fastmath=FASTMATH)
-def _kd_tree_node_data(
-        n_features,
-        n_nodes,
-        data,
-        idx_array,
-        idx_start,
-        idx_end,
-        float_type,
-):
+def create_kd_node_data_nojit(n_nodes, n_features, float_type=FLOAT_TYPE):
+    return np.empty((n_nodes, 2, n_features), dtype=float_type)
+
+
+create_kd_node_data = nb.njit()(create_kd_node_data_nojit)
+
+
+def create_kd_tree_data_nojit(data: FloatArray,
+                              leaf_size: int = 40,
+                              int_type=INT_TYPE,
+                              bool_type=BOOL_TYPE):
+
+    idx_array, idx_start, idx_end, is_leaf = bt.create_tree_data.py_func(
+        data, leaf_size, int_type, bool_type)
+    n_features = data.shape[1]
+    n_nodes = idx_start.size
+    node_data = create_kd_node_data_nojit(n_nodes, n_features, data.dtype)
+    return (idx_array, idx_start, idx_end, is_leaf, node_data)
+
+
+@nb.njit()
+def create_kd_tree_data(data: FloatArray,
+                        leaf_size: int = 40,
+                        int_type=INT_TYPE,
+                        bool_type=BOOL_TYPE):
+
+    idx_array, idx_start, idx_end, is_leaf = bt.create_tree_data(
+        data, leaf_size, int_type, bool_type)
+    n_features = data.shape[1]
+    n_nodes = idx_start.size
+    node_data = create_kd_node_data(n_nodes, n_features, data.dtype)
+    return (idx_array, idx_start, idx_end, is_leaf, node_data)
+
+
+@nb.njit(parallel=PARALLEL, fastmath=FASTMATH)
+def fill_kd_tree_node_data(n_features, n_nodes, data, idx_array, idx_start,
+                           idx_end, float_type, node_data):
     """Initialize the node for the dataset stored in self.data"""
-    node_bounds = np.empty((n_nodes, 2, n_features), dtype=float_type)
-    node_bounds[:, 0] = np.inf
-    node_bounds[:, 1] = -np.inf
+    # node_bounds = np.empty((n_nodes, 2, n_features), dtype=float_type)
+
+    node_data[:, 0] = np.inf
+    node_data[:, 1] = -np.inf
 
     for i_node in nb.prange(n_nodes):  # pylint: disable=not-an-iterable
         idx_start_value = idx_start[i_node]
         idx_end_value = idx_end[i_node]
 
-        lower_bounds = node_bounds[i_node, 0]
-        upper_bounds = node_bounds[i_node, 1]
+        lower_bounds = node_data[i_node, 0]
+        upper_bounds = node_data[i_node, 1]
 
         # Compute the actual data range.  At build time, this is slightly
         # slower than using the previously-computed bounds of the parent node,
@@ -66,7 +95,6 @@ def _kd_tree_node_data(
                 val = data_row[j]
                 lower_bounds[j] = min(lower_bounds[j], val)
                 upper_bounds[j] = max(upper_bounds[j], val)
-    return node_bounds
 
 
 @nb.njit(inline='always', fastmath=FASTMATH)
@@ -133,10 +161,10 @@ def rdist3(x, y):
 
 class KDTreeBase(bt.BinaryTree):
 
-    def _create_node_data(self):
-        return _kd_tree_node_data(self.n_features, self.n_nodes, self.data,
-                                  self.idx_array, self.idx_start, self.idx_end,
-                                  self.float_type)
+    def _fill_node_data(self):
+        fill_kd_tree_node_data(self.n_features, self.n_nodes, self.data,
+                               self.idx_array, self.idx_start, self.idx_end,
+                               self.float_type, self.node_data)
 
 
 def kdtree_spec(float_type=FLOAT_TYPE, int_type=INT_TYPE, bool_type=BOOL_TYPE):
@@ -147,10 +175,7 @@ def kdtree_spec(float_type=FLOAT_TYPE, int_type=INT_TYPE, bool_type=BOOL_TYPE):
 
 
 @nb.jitclass(kdtree_spec())
-class KDTree(KDTreeBase):
-
-    def __init__(self, data: FloatArray, leaf_size: int = 40):
-        self._init(data, leaf_size=leaf_size)
+class _KDTree(KDTreeBase):
 
     @property
     def float_type(self):
@@ -173,11 +198,23 @@ class KDTree(KDTreeBase):
         return min_max_rdist
 
 
-@nb.jitclass(kdtree_spec())
-class KDTree3(KDTreeBase):
+@nb.njit()
+def KDTree(data: FloatArray, leaf_size: int = 40):
+    (idx_array, idx_start, idx_end, is_leaf,
+     node_data) = create_kd_tree_data(data, leaf_size)
+    return _KDTree(data, leaf_size, idx_array, idx_start, idx_end, is_leaf,
+                   node_data)
 
-    def __init__(self, data: FloatArray, leaf_size: int = 40):
-        self._init(data, leaf_size=leaf_size)
+
+def KDTree_nojit(data: FloatArray, leaf_size: int = 40):
+    (idx_array, idx_start, idx_end, is_leaf,
+     node_data) = create_kd_tree_data_nojit(data, leaf_size)
+    return _KDTree(data, leaf_size, idx_array, idx_start, idx_end, is_leaf,
+                   node_data)
+
+
+@nb.jitclass(kdtree_spec())
+class _KDTree3(KDTreeBase):
 
     @property
     def float_type(self):
@@ -198,3 +235,18 @@ class KDTree3(KDTreeBase):
     @property
     def min_max_rdist(self):
         return min_max_rdist3
+
+
+@nb.njit()
+def KDTree3(data: FloatArray, leaf_size: int = 40):
+    (idx_array, idx_start, idx_end, is_leaf,
+     node_data) = create_kd_tree_data(data, leaf_size)
+    return _KDTree3(data, leaf_size, idx_array, idx_start, idx_end, is_leaf,
+                    node_data)
+
+
+def KDTree3_nojit(data: FloatArray, leaf_size: int = 40):
+    (idx_array, idx_start, idx_end, is_leaf,
+     node_data) = create_kd_tree_data_nojit(data, leaf_size)
+    return _KDTree3(data, leaf_size, idx_array, idx_start, idx_end, is_leaf,
+                    node_data)

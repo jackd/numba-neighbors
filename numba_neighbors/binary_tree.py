@@ -2,15 +2,15 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import os
 import abc
 from typing import Any, Callable, NamedTuple, Tuple, TypeVar
 import numba as nb
 import numpy as np
-from numba_neighbors import index_heap as ih
-
-NodeData = TypeVar('NodeData')
+from numba_neighbors import index_heap2 as ih
 
 FASTMATH = True
+PARALLEL = os.environ.get('NUMBA_PARALLEL', '1') != '0'
 
 INT_TYPE = np.int64
 INT_TYPE_T = nb.int64
@@ -25,8 +25,10 @@ IntArray = np.ndarray
 FloatArray = np.ndarray
 BoolArray = np.ndarray
 
+NodeDataArray = np.ndarray
+
 RDist = Callable[[FloatArray, FloatArray], float]
-MinMaxRDist = Callable[[NodeData, FloatArray], Tuple[float, float]]
+MinMaxRDist = Callable[[NodeDataArray, FloatArray], Tuple[float, float]]
 
 
 @nb.njit(inline='always')
@@ -115,7 +117,7 @@ def _simultaneous_sort(priorities: np.ndarray, values: np.ndarray) -> None:
             _simultaneous_sort(priorities[start:], values[start:])
 
 
-@nb.njit(parallel=True)
+@nb.njit(parallel=PARALLEL)
 def simultaneous_sort(priorities: np.ndarray, values: np.ndarray) -> None:
     """
     Independently sort the rows of the arrays according to pririties in place.
@@ -133,36 +135,20 @@ def simultaneous_sort(priorities: np.ndarray, values: np.ndarray) -> None:
         _simultaneous_sort(priorities[row], values[row])
 
 
-@nb.njit(parallel=True)
-def partial_simultaneous_sort(priorities: np.ndarray, values: np.ndarray,
-                              lengths: IntArray):
-    """
-    Independently sort the first segment of each row of the arrays.
-
-    This is the same as simultaneous_sort, but only affects the first
-    `lenghts[i]` elements of `priorities[i]` and `values[i]`.
-    """
-    assert (priorities.shape == values.shape)
-    assert (len(priorities.shape) == 2)
-    for row in nb.prange(priorities.shape[0]):  # pylint: disable=not-an-iterable
-        length = lengths[row]
-        _simultaneous_sort(priorities[row, :length], values[row:length])
-
-
-@nb.njit(parallel=True)
-def simultaneous_sort_partial(distances: FloatArray, indices: IntArray,
+@nb.njit(parallel=PARALLEL)
+def simultaneous_sort_partial(priorities: np.ndarray, values: np.ndarray,
                               counts: IntArray):
     """In-place simultaneous sort the given row of the arrays
 
     This python wrapper exists primarily to enable unit testing
     of the _simultaneous_sort C routine.
     """
-    assert (distances.shape == indices.shape)
-    assert (len(distances.shape) == 2)
-    assert (distances.shape[:1] == counts.shape)
-    for row in nb.prange(distances.shape[0]):  # pylint: disable=not-an-iterable
+    assert (priorities.shape == values.shape)
+    assert (len(priorities.shape) == 2)
+    assert (priorities.shape[:1] == counts.shape)
+    for row in nb.prange(priorities.shape[0]):  # pylint: disable=not-an-iterable
         count = counts[row]
-        _simultaneous_sort(distances[row, :count], indices[row, :count])
+        _simultaneous_sort(priorities[row, :count], values[row, :count])
 
 
 @nb.njit()
@@ -376,7 +362,7 @@ class IFPSampleQueryResult(NamedTuple):
 # return min_dist, max_dist
 
 
-@nb.njit(parallel=True, inline='always')
+@nb.njit(parallel=PARALLEL, inline='always')
 def arange(length, dtype=INT_TYPE):
     """Simple `np.arange` implementation without start/step."""
     out = np.empty((length,), dtype=dtype)
@@ -385,30 +371,11 @@ def arange(length, dtype=INT_TYPE):
     return out
 
 
-@nb.njit(parallel=True)
-def get_tree_data(data: FloatArray,
-                  leaf_size: int = 40,
-                  int_type=INT_TYPE,
-                  bool_type=BOOL_TYPE):
-    """
-    Get data associated with BinaryTree.
-
-    Args:
-        data: [N, n_features] 2D float array of tree points.
-        leaf_size: int, number of points in each leaf.
-        int_type: dtype of integer arrays used.
-        bool_type: dtype of bool arrays used.
-
-    Returns:
-        n_levels: int, number of levels of the tree
-        n_nodes: number of nodes in the tree
-        idx_array: [N] int_type array of integers. data[idx_array] are data points
-            in node ordering.
-        idx_start: [n_nodes] int_type array of start indices of each node range.
-        idx_end: [n_nodes] int_type array of end indices of each node range.
-        is_leaf: [n_nodes] bool array indicating which nodes are leaves.
-    """
-    # validate data
+@nb.jit()
+def create_tree_data(data: FloatArray,
+                     leaf_size: int = 40,
+                     int_type=INT_TYPE,
+                     bool_type=BOOL_TYPE):
     if data.size == 0:
         raise ValueError("X is an empty array")
 
@@ -428,16 +395,36 @@ def get_tree_data(data: FloatArray,
     is_leaf = np.zeros((n_nodes,), dtype=bool_type)
     # radius = np.zeros((n_nodes,), dtype=float_type)
 
+    return idx_array, idx_start, idx_end, is_leaf
+
+
+@nb.njit()
+def fill_tree_data(data: FloatArray, leaf_size: int, idx_array: IntArray,
+                   idx_start: IntArray, idx_end: IntArray,
+                   is_leaf: BoolArray) -> None:
+    """
+    Get data associated with BinaryTree.
+
+    Args:
+        data: [N, n_features] 2D float array of tree points.
+        leaf_size: int, number of points in each leaf.
+        int_type: dtype of integer arrays used.
+        bool_type: dtype of bool arrays used.
+
+    Returns:
+        n_levels: int, number of levels of the tree
+        n_nodes: number of nodes in the tree
+        idx_array: [N] int_type array of integers. data[idx_array] are data points
+            in node ordering.
+        idx_start: [n_nodes] int_type array of start indices of each node range.
+        idx_end: [n_nodes] int_type array of end indices of each node range.
+        is_leaf: [n_nodes] bool array indicating which nodes are leaves.
+    """
+    # validate data
+    n_data = data.shape[0]
+    n_nodes = idx_start.size
     _recursive_build(0, 0, n_data, leaf_size, n_nodes, data, idx_array,
                      idx_start, idx_end, is_leaf)
-    return (
-        n_levels,
-        n_nodes,
-        idx_array,
-        idx_start,
-        idx_end,
-        is_leaf,
-    )
 
 
 @nb.njit()
@@ -525,13 +512,15 @@ def rejection_ifp_sample_query_prealloc(
         counts: IntArray,
         consumed: BoolArray,
         min_dists: FloatArray,
+        heap_priorities: FloatArray,
+        heap_indices: IntArray,
         # ----- tree data
         data: FloatArray,
         idx_array: IntArray,
         idx_start: IntArray,
         idx_end: IntArray,
         is_leaf: BoolArray,
-        node_data: NodeData,
+        node_data: NodeDataArray,
         rdist: RDist,
         min_max_rdist: MinMaxRDist,
 ) -> float:
@@ -563,7 +552,7 @@ def rejection_ifp_sample_query_prealloc(
         be within this distane of a sampled point.
     """
     # initial rejection sample
-    sample_size, max_counts = dists.shape
+    sample_size = counts.size
     count = rejection_sample_query_prealloc(
         rejection_r,
         query_r,
@@ -590,11 +579,14 @@ def rejection_ifp_sample_query_prealloc(
 
     # construct heap
     n_data = data.shape[0]
-    min_dists *= -1
-    heap = ih.padded_index_heap(min_dists, arange(n_data),
-                                (sample_size - count) * max_counts + n_data)
+
+    # heap = ih.padded_index_heap(min_dists, arange(n_data),
+    #                             (sample_size - count) * max_counts + n_data)
+    for i in nb.prange(n_data):  # pylint: disable=not-an-iterable
+        heap_priorities[i] = -min_dists[i]
+        heap_indices[i] = i
+    heap = ih.IndexHeap(heap_priorities, heap_indices, n_data)
     heap.heapify()
-    min_dists *= -1
 
     # ifp sample
     return ifp_sample_query_prealloc(
@@ -699,6 +691,8 @@ def rejection_ifp_sample_precomputed_prealloc(
     si = sample_indices[:count]
     _update_min_dists(dists[si], query_indices[si], counts[si], count,
                       min_dists)
+    if count == sample_indices.size:
+        return np.inf
     min_dists *= -1
     heap = ih.padded_index_heap(min_dists,
                                 arange(in_size, dtype=sample_indices.dtype),
@@ -712,13 +706,12 @@ def rejection_ifp_sample_precomputed_prealloc(
 
 
 @nb.njit(fastmath=True)
-def rejection_ifp_sample_precomputed(
-        dists: FloatArray,
-        query_indices: IntArray,
-        counts: IntArray,
-        sample_size: int,
-        bool_type=BOOL_TYPE,
-        eps=1e-8) -> IFPSampleResult:
+def rejection_ifp_sample_precomputed(dists: FloatArray,
+                                     query_indices: IntArray,
+                                     counts: IntArray,
+                                     sample_size: int,
+                                     bool_type=BOOL_TYPE,
+                                     eps=1e-8) -> IFPSampleResult:
     in_size = counts.size
 
     sample_indices = np.empty((sample_size,), dtype=query_indices.dtype)
@@ -749,7 +742,7 @@ def ifp_sample_query_prealloc(
         idx_start: IntArray,
         idx_end: IntArray,
         is_leaf: BoolArray,
-        node_data: NodeData,
+        node_data: NodeDataArray,
         rdist: RDist,
         min_max_rdist: MinMaxRDist,
         eps: float = 1e-8) -> float:
@@ -876,7 +869,7 @@ def rejection_sample_precomputed(query_indices: IntArray,
     return RejectionSampleResult(sample_indices, count)
 
 
-@nb.njit(parallel=False)
+@nb.njit()
 def rejection_sample_query_prealloc(
         rejection_r: float,
         query_r: float,
@@ -893,7 +886,7 @@ def rejection_sample_query_prealloc(
         idx_start: IntArray,
         idx_end: IntArray,
         is_leaf: BoolArray,
-        node_data: NodeData,
+        node_data: NodeDataArray,
         rdist: RDist,
         min_max_rdist: MinMaxRDist,
 ) -> int:
@@ -945,19 +938,27 @@ def rejection_sample_query_prealloc(
     return sample_count
 
 
-@nb.njit(parallel=True)
-def get_node_indices(idx_array: IntArray, idx_start: IntArray,
-                     idx_end: IntArray, is_leaf: BoolArray):
-    """Get the index of the leaf of each data point."""
+@nb.njit()
+def get_node_indices_prealloc(idx_array: IntArray, idx_start: IntArray,
+                              idx_end: IntArray, is_leaf: BoolArray,
+                              node_indices: IntArray) -> None:
     n_nodes = is_leaf.size
-    nodes = np.empty((idx_array.size,), dtype=idx_start.dtype)
-    for i in nb.prange(n_nodes):  # pylint: disable=not-an-iterable
+    for i in range(n_nodes):  # pylint: disable=not-an-iterable
         if is_leaf[i]:
-            nodes[idx_array[idx_start[i]:idx_end[i]]] = i
-    return nodes
+            node_indices[idx_array[idx_start[i]:idx_end[i]]] = i
 
 
 @nb.njit()
+def get_node_indices(idx_array: IntArray, idx_start: IntArray,
+                     idx_end: IntArray, is_leaf: BoolArray) -> IntArray:
+    """Get the index of the leaf of each data point."""
+    node_indices = np.empty((idx_array.size,), dtype=idx_start.dtype)
+    get_node_indices_prealloc(idx_array, idx_start, idx_end, is_leaf,
+                              node_indices)
+    return node_indices
+
+
+@nb.njit(parallel=PARALLEL)
 def _rejection_sample_query_single_bottom_up(
         count: int,
         max_count: int,
@@ -974,7 +975,7 @@ def _rejection_sample_query_single_bottom_up(
         idx_start: IntArray,
         idx_end: IntArray,
         is_leaf: BoolArray,
-        node_data: NodeData,
+        node_data: NodeDataArray,
         rdist: RDist,
         min_max_rdist: MinMaxRDist,
 ):
@@ -1006,7 +1007,7 @@ def _rejection_sample_query_single_bottom_up(
     return count
 
 
-@nb.njit(parallel=True)
+@nb.njit(parallel=PARALLEL)
 def query_radius_bottom_up_prealloc(
         X: FloatArray,
         r: float,
@@ -1021,7 +1022,7 @@ def query_radius_bottom_up_prealloc(
         idx_start: IntArray,
         idx_end: IntArray,
         is_leaf: BoolArray,
-        node_data: NodeData,
+        node_data: NodeDataArray,
         rdist: RDist,
         min_max_rdist: MinMaxRDist,
 ):
@@ -1075,7 +1076,7 @@ def _query_radius_single_bottom_up(
         idx_start: IntArray,
         idx_end: IntArray,
         is_leaf: BoolArray,
-        node_data: NodeData,
+        node_data: NodeDataArray,
         rdist: RDist,
         min_max_rdist: MinMaxRDist,
 ) -> int:
@@ -1120,7 +1121,7 @@ def _query_radius_single_bottom_up(
     return count
 
 
-@nb.njit(parallel=True)
+@nb.njit(parallel=PARALLEL)
 def query_radius_prealloc(
         X: FloatArray,
         r: float,
@@ -1133,7 +1134,7 @@ def query_radius_prealloc(
         idx_start: IntArray,
         idx_end: IntArray,
         is_leaf: BoolArray,
-        node_data: NodeData,
+        node_data: NodeDataArray,
         rdist: RDist,
         min_max_rdist: MinMaxRDist,
 ) -> None:
@@ -1189,7 +1190,7 @@ def _query_radius_single(
         idx_start: IntArray,
         idx_end: IntArray,
         is_leaf: BoolArray,
-        node_data: NodeData,
+        node_data: NodeDataArray,
         rdist: RDist,
         min_max_rdist: MinMaxRDist,
 ) -> int:
@@ -1278,9 +1279,8 @@ def tree_spec(float_type=FLOAT_TYPE, int_type=INT_TYPE, bool_type=BOOL_TYPE):
         ('n_data', INT_TYPE_T),
         ('n_features', INT_TYPE_T),
         ('leaf_size', INT_TYPE_T),
-        ('n_levels', INT_TYPE_T),
         ('n_nodes', INT_TYPE_T),
-        ('data', float_type_t[:, ::1]),
+        ('data', float_type_t[:, :]),
         ('idx_array', int_type_t[::1]),
         ('idx_start', int_type_t[::1]),
         ('idx_end', int_type_t[::1]),
@@ -1320,24 +1320,41 @@ class BinaryTree(object):
     See kd_tree.KDTree for implementation.
     """
 
-    def __init__(self, data: FloatArray, leaf_size: int = 40):
-        self._init(data, leaf_size)
-
-    def _init(self, data: FloatArray, leaf_size: int = 40):
-        # assert (data.dtype == self.float_type)
+    def __init__(self, data: FloatArray, leaf_size: int, idx_array: IntArray,
+                 idx_start: IntArray, idx_end: IntArray, is_leaf: BoolArray,
+                 node_data: NodeDataArray):
+        fill_tree_data(data, leaf_size, idx_array, idx_start, idx_end, is_leaf)
         self.data = data
+        self.idx_array = idx_array
+        self.idx_start = idx_start
+        self.idx_end = idx_end
+        self.is_leaf = is_leaf
+        self.node_data = node_data
         self.n_data, self.n_features = data.shape
-        self.leaf_size = leaf_size
-        (self.n_levels, self.n_nodes, self.idx_array, self.idx_start,
-         self.idx_end, self.is_leaf) = get_tree_data(data,
-                                                     leaf_size,
-                                                     int_type=self.int_type,
-                                                     bool_type=self.bool_type)
-        self.node_data = self._create_node_data()  # pylint: disable=assignment-from-none
+        self.n_nodes = len(self.idx_start)
+        self._fill_node_data()
 
-    def _create_node_data(self):
-        return np.zeros((self.n_nodes, 0), dtype=self.float_type)
-        # raise NotImplementedError('Abstract method')
+    def _fill_node_data(self):
+        pass
+
+    # def __init__(self, data: FloatArray, leaf_size: int = 40):
+    #     self._init(data, leaf_size)
+
+    # def _init(self, data: FloatArray, leaf_size: int = 40):
+    #     # assert (data.dtype == self.float_type)
+    #     self.data = data
+    #     self.n_data, self.n_features = data.shape
+    #     self.leaf_size = leaf_size
+    #     (self.n_levels, self.n_nodes, self.idx_array, self.idx_start,
+    #      self.idx_end, self.is_leaf) = get_tree_data(data,
+    #                                                  leaf_size,
+    #                                                  int_type=self.int_type,
+    #                                                  bool_type=self.bool_type)
+    #     self.node_data = self._create_node_data()  # pylint: disable=assignment-from-none
+
+    # def _create_node_data(self):
+    #     return np.zeros((self.n_nodes, 0), dtype=self.float_type)
+    # raise NotImplementedError('Abstract method')
 
     @property
     def float_type(self):
@@ -1448,8 +1465,9 @@ class BinaryTree(object):
                                start_nodes: IntArray, max_count: int):
         n_queries = X.shape[0]
         dists = np.full((n_queries, max_count), np.inf, dtype=self.float_type)
-        indices = np.full(
-            (n_queries, max_count), self.n_data, dtype=self.int_type)
+        indices = np.full((n_queries, max_count),
+                          self.n_data,
+                          dtype=self.int_type)
         counts = np.zeros((n_queries,), dtype=self.int_type)
         self.query_radius_bottom_up_prealloc(X, r, start_nodes, dists, indices,
                                              counts)
@@ -1511,7 +1529,7 @@ class BinaryTree(object):
             counts: IntArray,
             consumed: BoolArray,
             min_dists: FloatArray,  # in_size, minimum distances
-            heap,  # heap, heap-sorted list of (neg_dist, index) tuples
+            heap: ih.IndexHeap,  # assumed to be heapified
     ) -> float:
         return ifp_sample_query_prealloc(
             query_r,
@@ -1574,7 +1592,10 @@ class BinaryTree(object):
             query_indices: IntArray,
             counts: IntArray,
             consumed: BoolArray,
-            min_dists: FloatArray) -> float:
+            min_dists: FloatArray,
+            heap_priorities: FloatArray,
+            heap_indices: IntArray,
+    ) -> float:
         """
         Simultaneous sampling and querying with preallocated data.
 
@@ -1591,6 +1612,8 @@ class BinaryTree(object):
             counts,
             consumed,
             min_dists,
+            heap_priorities,
+            heap_indices,
             self.data,
             self.idx_array,
             self.idx_start,
@@ -1635,13 +1658,22 @@ class BinaryTree(object):
         consumed = np.zeros((self.n_data,), dtype=self.bool_type)
         min_dists = np.full((self.n_data,), np.inf, dtype=self.float_type)
 
+        max_heap_length = sample_size * max_counts + self.n_data
+        heap_priorities = np.empty((max_heap_length,), dtype=self.float_type)
+        heap_indices = np.empty((max_heap_length,), dtype=self.int_type)
+
         min_dist = self.rejection_ifp_sample_query_prealloc(
             rejection_r, query_r, start_nodes, sample_indices, dists,
-            query_indices, counts, consumed, min_dists)
+            query_indices, counts, consumed, min_dists, heap_priorities,
+            heap_indices)
 
         return IFPSampleQueryResult(
             IFPSampleResult(sample_indices, min_dists, min_dist),
             QueryResult(dists, query_indices, counts))
+
+    def get_node_indices_prealloc(self, node_indices: IntArray):
+        get_node_indices_prealloc(self.idx_array, self.idx_start, self.idx_end,
+                                  self.is_leaf, node_indices)
 
     def get_node_indices(self):
         """Get the node indices of the leaf containing each point in data."""
@@ -1660,3 +1692,13 @@ class BinaryTree(object):
         """
         self.data, self.idx_array = permute_tree(self.data, self.idx_array,
                                                  perm)
+
+
+def binary_tree(data: FloatArray,
+                leaf_size: int = 40,
+                int_type=INT_TYPE,
+                bool_type=BOOL_TYPE):
+    return BinaryTree(data,
+                      leaf_size,
+                      *create_tree_data(data, leaf_size, int_type, bool_type),
+                      node_data=None)

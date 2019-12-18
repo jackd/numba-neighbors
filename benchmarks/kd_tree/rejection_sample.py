@@ -22,8 +22,8 @@ N = 1024
 max_sample_size = 512
 D = 3
 rejection_r = 0.1
-query_r = 0.2
-max_neighbors = 256
+query_r = 0.1 * np.sqrt(2)
+max_neighbors = 32
 leaf_size = 32
 
 np.random.seed(124)
@@ -47,12 +47,11 @@ def numba3_impl():
                                        max_neighbors)
 
 
-@benchmark()
-def separate():
-    ragged_in_place_and_down_sample_query_np(data, N, rejection_r,
-                                             max_neighbors, max_sample_size,
-                                             query_r, max_neighbors)
-
+# @benchmark()
+# def separate():
+#     ragged_in_place_and_down_sample_query_np(data, N, rejection_r,
+#                                              max_neighbors, max_sample_size,
+#                                              query_r, max_neighbors)
 
 run_benchmarks(20, 100)
 sample_result, query_result = numba_impl()

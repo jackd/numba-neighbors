@@ -145,6 +145,11 @@ def _heapify(self):
 @njit(inline='always')
 def _heappush(self, priority, value):
     """Push item onto heap, maintaining the heap invariant."""
+    # if self.length == self.max_length - 1:
+    #     # raise ValueError('Cannot push: heap full')
+    #     # raise IndexError
+    #     # raise Exception
+    #     print('Tried pushing onto full heap, oh dear!')
     _arr_append(self, priority, value)
     _siftdown(self, 0, self.length - 1)
 
@@ -152,6 +157,11 @@ def _heappush(self, priority, value):
 @njit(inline='always')
 def _heappop(self) -> Tuple:
     """Pop the smallest item off the heap, maintaining the heap invariant."""
+    # if self.length == 0:
+    #     # raise ValueError('Cannot pop: heap empty')
+    #     # raise IndexError
+    #     # raise Exception
+    #     print('Tried popping off empty heap, oh dear!')
     lastelt = _arr_pop(self)
     if self.length > 0:
         returnitem = _getitem(self, 0)

@@ -49,7 +49,6 @@ kwargs = dict(data=data,
               max_neigh1=max_neigh1)
 
 
-# @benchmark('numba')
 @njit()
 def numba_impl(data, leaf_size, n1, r0, r1, max_neigh0, max_neigh1):
     tree = kd.KDTree(data, leaf_size)

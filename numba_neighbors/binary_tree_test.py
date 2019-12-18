@@ -10,6 +10,13 @@ from numba_neighbors import binary_tree as bt
 
 class BinaryTreeTest(unittest.TestCase):
 
+    def test_build(self):
+        np.random.seed(123)
+        N = 256
+        data = np.random.random(size=(N, 1)).astype(np.float32)
+        tree = bt.binary_tree(data, leaf_size=1)
+        np.testing.assert_equal(data[tree.idx_array], np.sort(data, axis=0))
+
     def test_simultaneous_sort(self):
         np.random.seed(123)
         N = 8
