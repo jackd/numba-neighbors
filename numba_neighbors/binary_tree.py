@@ -3,8 +3,7 @@ from __future__ import division
 from __future__ import print_function
 
 import os
-import abc
-from typing import Any, Callable, NamedTuple, Tuple, TypeVar
+from typing import Any, Callable, NamedTuple, Tuple, TypeVar, Optional
 import numba as nb
 import numpy as np
 from numba_neighbors import index_heap2 as ih
@@ -815,7 +814,8 @@ def ifp_sample_query_prealloc(
 def rejection_sample_precomputed_prealloc(query_indices: IntArray,
                                           counts: IntArray,
                                           sample_indices: IntArray,
-                                          consumed: BoolArray) -> int:
+                                          consumed: BoolArray,
+                                          valid: Optional[BoolArray]=None) -> int:
     """
     Perform rejection  sampling with precomputed sample indices.
 
@@ -824,6 +824,9 @@ def rejection_sample_precomputed_prealloc(query_indices: IntArray,
         counts: [in_size] number of valid indices for each row of query_indices.
         sample_indices: [max_sample_size] preallocated int array.
         consumed: [in_size] preallocated bool array.
+        valid: [in_size, max_neighbors] optional bool array. If given, any
+            false value will result in the corresponding query_indices being
+            ignored.
 
     Returns:
         count: number of points sampled.
@@ -838,6 +841,8 @@ def rejection_sample_precomputed_prealloc(query_indices: IntArray,
             qi = query_indices[i]
             count = counts[i]
             for j in nb.prange(count):  # pylint: disable=not-an-iterable
+                if valid is not None and not valid[i, j]:
+                    continue
                 consumed[qi[j]] = 1
             sample_indices[sample_count] = i
             sample_count += 1
@@ -851,7 +856,8 @@ def rejection_sample_precomputed(query_indices: IntArray,
                                  counts: IntArray,
                                  max_samples: int,
                                  int_type=INT_TYPE,
-                                 bool_type=BOOL_TYPE) -> RejectionSampleResult:
+                                 bool_type=BOOL_TYPE,
+                                 valid: Optional[BoolArray]=None) -> RejectionSampleResult:
     """
     Perform rejection  sampling with precomputed sample indices.
 
@@ -865,7 +871,8 @@ def rejection_sample_precomputed(query_indices: IntArray,
     sample_indices = np.full((max_samples,), -1, dtype=int_type)
     consumed = np.zeros((in_size,), dtype=bool_type)
     count = rejection_sample_precomputed_prealloc(query_indices, counts,
-                                                  sample_indices, consumed)
+                                                  sample_indices, consumed,
+                                                  valid)
     return RejectionSampleResult(sample_indices, count)
 
 

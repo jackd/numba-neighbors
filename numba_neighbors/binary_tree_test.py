@@ -1,6 +1,3 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
 from numba_neighbors.binary_tree import simultaneous_sort
 
 import numpy as np
@@ -48,6 +45,27 @@ class BinaryTreeTest(unittest.TestCase):
         actual = permuted_data[permuted_idx_array]
         expected = data[idx_array]
         np.testing.assert_equal(actual, expected)
+
+    def rejection_sample_valid(self):
+        np.random.seed(123)
+        N = 256
+        data = np.random.random(size=(N, 1)).astype(np.float32)
+        tree = bt.binary_tree(data, leaf_size=16)
+        r0 = 0.2
+        r1 = 0.1
+
+        dists, indices, counts = tree.query_radius(data, r=r0**2, max_count=N)
+
+        valid = dists < r1**2
+        actual_sample_indices, actual_count = bt.rejection_sample_precomputed(
+            indices, counts, N, valid=valid)
+
+        dists, indices, counts = tree.query_radius(data, r=r1**2, max_count=N)
+        expected_sample_indices, expected_count = bt.rejection_sample_precomputed(
+            indices, counts, N)
+
+        np.testing.assert_equal(actual_sample_indices, expected_sample_indices)
+        np.testing.assert_equal(actual_count, expected_count)
 
 
 if __name__ == '__main__':
