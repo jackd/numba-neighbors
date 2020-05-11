@@ -1,12 +1,12 @@
-from numba_neighbors.binary_tree import simultaneous_sort
+import unittest
 
 import numpy as np
-import unittest
+
 from numba_neighbors import binary_tree as bt
+from numba_neighbors.binary_tree import simultaneous_sort
 
 
 class BinaryTreeTest(unittest.TestCase):
-
     def test_build(self):
         np.random.seed(123)
         N = 256
@@ -39,8 +39,7 @@ class BinaryTreeTest(unittest.TestCase):
         perm = np.arange(N)
         np.random.shuffle(perm)
 
-        permuted_data, permuted_idx_array = bt.permute_tree(
-            data, idx_array, perm)
+        permuted_data, permuted_idx_array = bt.permute_tree(data, idx_array, perm)
 
         actual = permuted_data[permuted_idx_array]
         expected = data[idx_array]
@@ -54,19 +53,21 @@ class BinaryTreeTest(unittest.TestCase):
         r0 = 0.2
         r1 = 0.1
 
-        dists, indices, counts = tree.query_radius(data, r=r0**2, max_count=N)
+        dists, indices, counts = tree.query_radius(data, r=r0 ** 2, max_count=N)
 
-        valid = dists < r1**2
+        valid = dists < r1 ** 2
         actual_sample_indices, actual_count = bt.rejection_sample_precomputed(
-            indices, counts, N, valid=valid)
+            indices, counts, N, valid=valid
+        )
 
-        dists, indices, counts = tree.query_radius(data, r=r1**2, max_count=N)
+        dists, indices, counts = tree.query_radius(data, r=r1 ** 2, max_count=N)
         expected_sample_indices, expected_count = bt.rejection_sample_precomputed(
-            indices, counts, N)
+            indices, counts, N
+        )
 
         np.testing.assert_equal(actual_sample_indices, expected_sample_indices)
         np.testing.assert_equal(actual_count, expected_count)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

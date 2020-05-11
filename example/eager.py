@@ -1,18 +1,40 @@
 import numpy as np
-from numba import njit, prange
-from numba import int64, float32, float64, void
-from numba_neighbors.kd_tree import KDTree3
+from numba import float32, float64, int64, njit, prange, void
+
 from numba_neighbors.binary_tree import PARALLEL
+from numba_neighbors.kd_tree import KDTree3
 
 
-@njit(void(float32[:, :], int64, int64, float64, int64, int64, int64, int64[:],
-           float32[:, :], int64[:, :], int64[:]),
-      parallel=PARALLEL,
-      fastmath=True)
-def ifp_sample_query_prealloc(coords: np.ndarray, valid_size: int,
-                              out_size: int, radius: float, k_query: int,
-                              k_return: int, leaf_size: int, sample_indices,
-                              dists, neigh_indices, row_lengths):
+@njit(
+    void(
+        float32[:, :],
+        int64,
+        int64,
+        float64,
+        int64,
+        int64,
+        int64,
+        int64[:],
+        float32[:, :],
+        int64[:, :],
+        int64[:],
+    ),
+    parallel=PARALLEL,
+    fastmath=True,
+)
+def ifp_sample_query_prealloc(
+    coords: np.ndarray,
+    valid_size: int,
+    out_size: int,
+    radius: float,
+    k_query: int,
+    k_return: int,
+    leaf_size: int,
+    sample_indices,
+    dists,
+    neigh_indices,
+    row_lengths,
+):
     r2 = radius * radius
     coords = coords[:valid_size]
     tree = KDTree3(coords, leaf_size)
@@ -29,19 +51,30 @@ def ifp_sample_query_prealloc(coords: np.ndarray, valid_size: int,
         k = min(valid_size, k_query)
         for i in prange(out_size):  # pylint: disable=not-an-iterable
             neigh_indices[i] = i
-        tree.query_radius_bottom_up_prealloc(coords, r2, start_nodes,
-                                             dists[:valid_size, :k],
-                                             neigh_indices[:valid_size, :k],
-                                             row_lengths[:valid_size])
+        tree.query_radius_bottom_up_prealloc(
+            coords,
+            r2,
+            start_nodes,
+            dists[:valid_size, :k],
+            neigh_indices[:valid_size, :k],
+            row_lengths[:valid_size],
+        )
         out_size = valid_size
     else:
         # we have to do the sample
         consumed = np.zeros((out_size,), dtype=np.uint8)
         min_dists = np.full((valid_size,), np.inf, dtype=np.float32)
-        _ = tree.rejection_ifp_sample_query_prealloc(r2, r2, start_nodes,
-                                                     sample_indices, dists,
-                                                     neigh_indices, row_lengths,
-                                                     consumed, min_dists)
+        _ = tree.rejection_ifp_sample_query_prealloc(
+            r2,
+            r2,
+            start_nodes,
+            sample_indices,
+            dists,
+            neigh_indices,
+            row_lengths,
+            consumed,
+            min_dists,
+        )
         # sample_result, query_result = tree.ifp_sample_query(
         #     r2, start_nodes, out_size, k_query)
 
@@ -69,4 +102,4 @@ def ifp_sample_query_prealloc(coords: np.ndarray, valid_size: int,
                 dis[k] = np.sqrt(dis[k])
 
 
-print('done')
+print("done")

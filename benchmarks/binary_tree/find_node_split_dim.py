@@ -1,11 +1,7 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import numpy as np
-from numba_neighbors.benchmark_utils import run_benchmarks, benchmark
+
 from numba_neighbors import binary_tree as bt
-import sklearn.neighbors
+from numba_neighbors.benchmark_utils import benchmark, run_benchmarks
 
 N = 2048
 NS = 1024
@@ -29,7 +25,7 @@ def get_data():
 #         data, node_indices, n_features, n_points)
 
 
-@benchmark('numba')
+@benchmark("numba")
 def numba_impl():
     data = get_data()
     return bt.find_node_split_dim(*data)
@@ -40,7 +36,7 @@ def numpy_find(data, node_indices):
     return np.argmax(np.ptp(data))
 
 
-@benchmark('numpy')
+@benchmark("numpy")
 def numpy_impl():
     return numpy_find(*get_data())
 

@@ -1,19 +1,16 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+import unittest
+
+import numpy as np
+from sklearn.neighbors import KDTree as sk_KDTree
+
+from numba_neighbors import binary_tree as bt
+from numba_neighbors import kd_tree as kd
 
 # import os
 # os.environ['NUMBA_DISABLE_JIT'] = '1'
 
-import numpy as np
-import unittest
-from numba_neighbors import kd_tree as kd
-from numba_neighbors import binary_tree as bt
-from sklearn.neighbors import KDTree as sk_KDTree
-
 
 class KDTreeTest(unittest.TestCase):
-
     def tree(self, data, leaf_size):
         return kd.KDTree(data, leaf_size=leaf_size)
 
@@ -60,7 +57,8 @@ class KDTreeTest(unittest.TestCase):
         sk_tree = sk_KDTree(data, leaf_size=leaf_size)
 
         expected_indices, expected_dists = sk_tree.query_radius(
-            X, r, return_distance=True, sort_results=True)
+            X, r, return_distance=True, sort_results=True
+        )
         expected_counts = [d.size for d in expected_dists]
         expected_dists = np.concatenate(expected_dists, axis=0)
         expected_indices = np.concatenate(expected_indices, axis=0)
@@ -74,8 +72,9 @@ class KDTreeTest(unittest.TestCase):
         numba_tree.query_radius_prealloc(X, r2, dists, indices, counts)
 
         bt.simultaneous_sort_partial(dists, indices, counts)
-        mask = np.tile(np.expand_dims(np.arange(max_neighbors), 0),
-                       (n, 1)) < np.expand_dims(counts, axis=1)
+        mask = np.tile(
+            np.expand_dims(np.arange(max_neighbors), 0), (n, 1)
+        ) < np.expand_dims(counts, axis=1)
         flat_dists = dists[mask]
         flat_indices = indices[mask]
 
@@ -99,7 +98,8 @@ class KDTreeTest(unittest.TestCase):
         sk_tree = sk_KDTree(data, leaf_size=leaf_size)
 
         expected_indices, expected_dists = sk_tree.query_radius(
-            X, r, return_distance=True, sort_results=True)
+            X, r, return_distance=True, sort_results=True
+        )
         expected_counts = [d.size for d in expected_dists]
         expected_dists = np.concatenate(expected_dists, axis=0)
         expected_indices = np.concatenate(expected_indices, axis=0)
@@ -113,12 +113,14 @@ class KDTreeTest(unittest.TestCase):
 
         start_nodes = numba_tree.get_node_indices()[X_indices]
 
-        numba_tree.query_radius_bottom_up_prealloc(X, r2, start_nodes, dists,
-                                                   indices, counts)
+        numba_tree.query_radius_bottom_up_prealloc(
+            X, r2, start_nodes, dists, indices, counts
+        )
 
         bt.simultaneous_sort_partial(dists, indices, counts)
-        mask = np.tile(np.expand_dims(np.arange(max_neighbors), 0),
-                       (n, 1)) < np.expand_dims(counts, axis=1)
+        mask = np.tile(
+            np.expand_dims(np.arange(max_neighbors), 0), (n, 1)
+        ) < np.expand_dims(counts, axis=1)
         flat_dists = dists[mask]
         flat_indices = indices[mask]
 
@@ -142,11 +144,13 @@ class KDTreeTest(unittest.TestCase):
 
         numba_tree = self.tree(data, leaf_size=leaf_size)
         start_indices = numba_tree.get_node_indices()
-        sr, qr = numba_tree.ifp_sample_query(r2, start_indices, sample_size,
-                                             max_neighbors)
+        sr, qr = numba_tree.ifp_sample_query(
+            r2, start_indices, sample_size, max_neighbors
+        )
 
         sr2, qr2 = numba_tree.rejection_ifp_sample_query(
-            r2, r2, start_indices, sample_size, max_neighbors)
+            r2, r2, start_indices, sample_size, max_neighbors
+        )
 
         np.testing.assert_equal(sr.indices, sr2.indices)
         np.testing.assert_allclose(sr.min_dists, sr2.min_dists)
@@ -157,11 +161,11 @@ class KDTreeTest(unittest.TestCase):
         np.testing.assert_equal(qr.counts, qr2.counts)
 
         dists, indices, counts = numba_tree.query_radius_bottom_up(
-            data, r2, start_indices, max_neighbors)
+            data, r2, start_indices, max_neighbors
+        )
         sr3 = bt.ifp_sample_precomputed(dists, indices, counts, sample_size)
 
-        sr4 = bt.rejection_ifp_sample_precomputed(dists, indices, counts,
-                                                  sample_size)
+        sr4 = bt.rejection_ifp_sample_precomputed(dists, indices, counts, sample_size)
 
         # # compare sr3 / sr4
         np.testing.assert_allclose(sr3.min_dists, sr4.min_dists)
@@ -185,7 +189,6 @@ class KDTreeTest(unittest.TestCase):
 
 
 class KDTree3Test(KDTreeTest):
-
     @property
     def num_dims(self):
         return 3
@@ -194,5 +197,5 @@ class KDTree3Test(KDTreeTest):
         return kd.KDTree3(data, leaf_size=leaf_size)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -1,11 +1,8 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import numpy as np
-from numba_neighbors.benchmark_utils import run_benchmarks
-from numba_neighbors import binary_tree as bt
 import sklearn.neighbors
+
+from numba_neighbors import binary_tree as bt
+from numba_neighbors.benchmark_utils import run_benchmarks
 
 N = 2048
 k = 32
@@ -44,9 +41,5 @@ def numpy_impl():
 
 
 run_benchmarks(
-    10,
-    100,
-    ('sklearn', sklearn_impl),
-    ('numba', numba_impl),
-    ('numpy', numpy_impl),
+    10, 100, ("sklearn", sklearn_impl), ("numba", numba_impl), ("numpy", numpy_impl),
 )

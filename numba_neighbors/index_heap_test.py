@@ -1,26 +1,23 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
-import os
-os.environ['NUMBA_DISABLE_JIT'] = '1'
-
-import unittest
 import heapq
+import os
+import unittest
+
+import numpy as np
+
 from numba_neighbors import index_heap as ih
 from numba_neighbors import index_heap2 as ih2
-import numpy as np
+
+os.environ["NUMBA_DISABLE_JIT"] = "1"
+
 
 max_length = 100
 length = 50
 
 
 class IndexHeapTest(unittest.TestCase):
-
     def setUp(self):
         np.random.seed(123)
-        self.priorities = np.random.uniform(size=(max_length,)).astype(
-            np.float32)
+        self.priorities = np.random.uniform(size=(max_length,)).astype(np.float32)
         self.indices = np.arange(max_length)
         self.heap = list(zip(self.priorities[:length], self.indices[:length]))
         heapq.heapify(self.heap)
@@ -45,18 +42,15 @@ class IndexHeapTest(unittest.TestCase):
         self.assertEqual(actualval, expectedval)
 
     def test_heappush(self):
-        heapq.heappush(self.heap,
-                       (self.priorities[length], self.indices[length]))
+        heapq.heappush(self.heap, (self.priorities[length], self.indices[length]))
         self.iheap.push(self.priorities[length], self.indices[length])
         self._assert_heaps_equal()
 
 
 class IndexHeap2Test(IndexHeapTest):
-
     def setUp(self):
         np.random.seed(123)
-        self.priorities = np.random.uniform(size=(max_length,)).astype(
-            np.float32)
+        self.priorities = np.random.uniform(size=(max_length,)).astype(np.float32)
         self.indices = np.arange(max_length)
         self.heap = list(zip(self.priorities[:length], self.indices[:length]))
         heapq.heapify(self.heap)
@@ -65,5 +59,5 @@ class IndexHeap2Test(IndexHeapTest):
         self.iheap.heapify()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

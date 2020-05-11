@@ -1,21 +1,11 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
-import os
+import heapq
 
 # os.environ['NUMBA_DISABLE_JIT'] = '1'
 import numpy as np
-from numba import njit
-from numba_neighbors.benchmark_utils import run_benchmarks, benchmark
+
 from numba_neighbors import kd_tree as kd
-from dcbs.sparse.sample import ragged_in_place_and_down_sample_query_np
-import functools
-import heapq
+from numba_neighbors.benchmark_utils import benchmark, run_benchmarks
+
 heapq.heappush
 
 N = 1024
@@ -31,20 +21,28 @@ data = np.random.uniform(size=(N, D)).astype(kd.FLOAT_TYPE)
 data /= np.linalg.norm(data, axis=-1, keepdims=True)
 
 
-@benchmark('numba')
+@benchmark("numba")
 def numba_impl():
     tree = kd.KDTree(data, leaf_size)
-    return tree.rejection_sample_query(rejection_r**2, query_r**2,
-                                       tree.get_node_indices(), max_sample_size,
-                                       max_neighbors)
+    return tree.rejection_sample_query(
+        rejection_r ** 2,
+        query_r ** 2,
+        tree.get_node_indices(),
+        max_sample_size,
+        max_neighbors,
+    )
 
 
-@benchmark('numba3')
+@benchmark("numba3")
 def numba3_impl():
     tree = kd.KDTree3(data, leaf_size)
-    return tree.rejection_sample_query(rejection_r**2, query_r**2,
-                                       tree.get_node_indices(), max_sample_size,
-                                       max_neighbors)
+    return tree.rejection_sample_query(
+        rejection_r ** 2,
+        query_r ** 2,
+        tree.get_node_indices(),
+        max_sample_size,
+        max_neighbors,
+    )
 
 
 # @benchmark()
