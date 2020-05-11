@@ -7,7 +7,8 @@ so when I think maybe I can make it faster by doing this I'll know I'm wrong.
 from typing import Tuple
 
 import numpy as np
-from numba import jitclass, njit, types
+from numba import njit, types
+from numba.experimental import jitclass
 
 
 @jitclass(

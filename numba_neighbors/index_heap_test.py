@@ -1,14 +1,10 @@
 import heapq
-import os
 import unittest
 
 import numpy as np
 
 from numba_neighbors import index_heap as ih
 from numba_neighbors import index_heap2 as ih2
-
-os.environ["NUMBA_DISABLE_JIT"] = "1"
-
 
 max_length = 100
 length = 50

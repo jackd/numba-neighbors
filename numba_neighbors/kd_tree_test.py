@@ -152,9 +152,9 @@ class KDTreeTest(unittest.TestCase):
             r2, r2, start_indices, sample_size, max_neighbors
         )
 
-        np.testing.assert_equal(sr.indices, sr2.indices)
-        np.testing.assert_allclose(sr.min_dists, sr2.min_dists)
         np.testing.assert_allclose(sr.min_dist, sr2.min_dist)
+        np.testing.assert_allclose(sr.min_dists, sr2.min_dists)
+        np.testing.assert_equal(sr.indices, sr2.indices)
 
         np.testing.assert_allclose(qr.dists, qr2.dists)
         np.testing.assert_equal(qr.indices, qr2.indices)

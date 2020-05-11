@@ -4,7 +4,7 @@ from typing import Callable, NamedTuple, Optional, Tuple
 import numba as nb
 import numpy as np
 
-from numba_neighbors import index_heap2 as ih
+from numba_neighbors import index_heap as ih
 
 FASTMATH = True
 PARALLEL = os.environ.get("NUMBA_PARALLEL", "1") != "0"
@@ -49,7 +49,9 @@ def dual_swap(darr, iarr, i1, i2):
 
 
 @nb.njit()
-def _simultaneous_sort(priorities: np.ndarray, values: np.ndarray) -> None:
+def _simultaneous_sort(  # pylint:disable=too-many-branches
+    priorities: np.ndarray, values: np.ndarray
+) -> None:
     """
     Recursively sort the arrays according to priorities in place.
 
@@ -234,7 +236,7 @@ def partition_node_indices(
         swap(node_indices, midindex, right)
         if midindex == split_index:
             break
-        elif midindex < split_index:
+        if midindex < split_index:
             left = midindex + 1
         else:
             right = midindex - 1
@@ -298,67 +300,6 @@ class RejectionSampleQueryResult(NamedTuple):
 class IFPSampleQueryResult(NamedTuple):
     sample_result: IFPSampleResult
     query_result: QueryResult
-
-
-# class TreeData(NamedTuple):
-#     n_levels: int
-#     n_nodes: int
-#     data: FloatArray
-#     idx_array: IntArray
-#     idx_start: IntArray
-#     idx_end: IntArray
-#     is_leaf: BoolArray
-
-# @nb.njit(inline='always', fastmath=FASTMATH)
-# def min_rdist(node_bounds, i_node, x):
-#     """Compute the minimum reduced-distance between a point and a node"""
-#     rdist = 0.0
-
-#     for j in range(x.size):
-#         d_lo = node_bounds[0, i_node, j] - x[j]
-#         d_hi = x[j] - node_bounds[1, i_node, j]
-#         d = ((d_lo + abs(d_lo)) + (d_hi + abs(d_hi))) / 2
-#         rdist += d * d
-
-#     return rdist
-
-# @nb.njit(inline='always', fastmath=FASTMATH)
-# def min_dist(node_bounds, i_node, pt):
-#     return pow(min_rdist(node_bounds, i_node, pt), 0.5)
-
-# @nb.njit(inline='always', fastmath=FASTMATH)
-# def max_rdist(node_bounds, i_node, x):
-#     """Compute the maximum reduced-distance between a point and a node"""
-#     rdist = 0.0
-
-#     for j in range(x.ize):
-#         d_lo = abs(x[j] - node_bounds[0, i_node, j])
-#         d_hi = abs(x[j] - node_bounds[1, i_node, j])
-#         d = max(d_lo, d_hi)
-#         rdist += d * d
-
-#     return rdist
-
-# @nb.njit(inline='always', fastmath=FASTMATH)
-# def max_dist(node_bounds, i_node, x):
-#     """Compute the maximum distance between a point and a node"""
-#     return pow(max_rdist(node_bounds, i_node, x), 0.5)
-
-# @nb.njit(inline='always', fastmath=FASTMATH)
-# def _min_max_rdist(node_bounds, i_node, x):
-#     """Compute the minimum and maximum distance between a point and a node"""
-
-#     min_dist = 0.0
-#     max_dist = 0.0
-
-#     for j in range(x.size):
-#         d_lo = node_bounds[0, i_node, j] - x[j]
-#         d_hi = x[j] - node_bounds[1, i_node, j]
-#         d = (d_lo + abs(d_lo)) + (d_hi + abs(d_hi))
-#         min_dist += pow(0.5 * d, 2)
-#         max_dist += pow(max(abs(d_lo), abs(d_hi)), 2)
-#
-# return min_dist, max_dist
 
 
 @nb.njit(parallel=PARALLEL, inline="always")
@@ -448,7 +389,6 @@ def _recursive_build(
     n_points = idx_end_value - idx_start_value
     n_mid = n_points // 2
     idx_array_slice = idx_array[idx_start_value:idx_end_value]
-    data = data
 
     # initialize node data
     # self._init_node(i_node, idx_start, idx_end)
@@ -618,7 +558,6 @@ def rejection_ifp_sample_query_prealloc(
         dists[count:],
         query_indices[count:],
         counts[count:],
-        consumed,
         min_dists,
         heap,
         data,
@@ -760,7 +699,6 @@ def ifp_sample_query_prealloc(
     dists: FloatArray,
     query_indices: IntArray,
     counts: IntArray,
-    consumed: BoolArray,
     min_dists: FloatArray,  # in_size, minimum distances
     heap: ih.IndexHeap,  # heapified IndexHeap
     # -----
@@ -783,7 +721,7 @@ def ifp_sample_query_prealloc(
     Args:
         query_r: float, reduced query radius.
         start_nodes: int array, node indices of tree data.
-        sample_indices, dists, query_indices, counts, consumed, in_dists, heap:
+        sample_indices, dists, query_indices, counts, in_dists, heap:
             preallocated data
         *tree_data: data from the input BinaryTree
         eps: float, the amount by which min_dist must be different to saved
@@ -801,7 +739,7 @@ def ifp_sample_query_prealloc(
         top_dist, index = heap.pop()
         min_dist = min_dists[index]
         if np.isfinite(min_dist):
-            diff = abs(min_dist + top_dist)  # top dist is negative
+            diff = abs(min_dist + top_dist)  # top_dist is negative
             if diff > eps:
                 continue
         sample_indices[count] = index
@@ -1333,7 +1271,7 @@ def tree_spec(float_type=FLOAT_TYPE, int_type=INT_TYPE, bool_type=BOOL_TYPE):
     ]
 
 
-class BinaryTree(object):
+class BinaryTree:
     """
     Base class for binary trees.
 
@@ -1603,25 +1541,23 @@ class BinaryTree(object):
         dists: FloatArray,
         query_indices: IntArray,
         counts: IntArray,
-        consumed: BoolArray,
         min_dists: FloatArray,  # in_size, minimum distances
         heap: ih.IndexHeap,  # assumed to be heapified
     ) -> float:
         return ifp_sample_query_prealloc(
-            query_r,
-            start_nodes,
-            sample_indices,
-            dists,
-            query_indices,
-            counts,
-            consumed,
-            min_dists,
-            heap,
-            self.data,
-            self.idx_array,
-            self.idx_start,
-            self.idx_end,
-            self.is_leaf,
+            query_r=query_r,
+            start_nodes=start_nodes,
+            sample_indices=sample_indices,
+            dists=dists,
+            query_indices=query_indices,
+            counts=counts,
+            min_dists=min_dists,
+            heap=heap,
+            data=self.data,
+            idx_array=self.idx_array,
+            idx_start=self.idx_start,
+            idx_end=self.idx_end,
+            is_leaf=self.is_leaf,
             node_data=self.node_data,
             rdist=self.rdist,
             min_max_rdist=self.min_max_rdist,
@@ -1635,7 +1571,6 @@ class BinaryTree(object):
         dists = np.full(shape, np.inf, dtype=self.float_type)
         query_indices = np.full(shape, self.n_data, dtype=self.int_type)
         counts = np.full((sample_size,), -1, dtype=self.int_type)
-        consumed = np.zeros((self.n_data,), dtype=self.bool_type)
         min_dists = np.full((self.n_data,), -np.inf, dtype=self.float_type)
 
         # heap = list(zip(min_dists, arange(self.n_data,)))
@@ -1646,15 +1581,14 @@ class BinaryTree(object):
         )
         min_dists *= -1
         min_dist = self.ifp_sample_query_prealloc(
-            query_r,
-            start_nodes,
-            sample_indices,
-            dists,
-            query_indices,
-            counts,
-            consumed,
-            min_dists,
-            heap,
+            query_r=query_r,
+            start_nodes=start_nodes,
+            sample_indices=sample_indices,
+            dists=dists,
+            query_indices=query_indices,
+            counts=counts,
+            min_dists=min_dists,
+            heap=heap,
         )
 
         return IFPSampleQueryResult(
@@ -1685,22 +1619,22 @@ class BinaryTree(object):
         should be within this reduced distance of a sampled point.
         """
         return rejection_ifp_sample_query_prealloc(
-            rejection_r,
-            query_r,
-            start_nodes,
-            sample_indices,
-            dists,
-            query_indices,
-            counts,
-            consumed,
-            min_dists,
-            heap_priorities,
-            heap_indices,
-            self.data,
-            self.idx_array,
-            self.idx_start,
-            self.idx_end,
-            self.is_leaf,
+            rejection_r=rejection_r,
+            query_r=query_r,
+            start_nodes=start_nodes,
+            sample_indices=sample_indices,
+            dists=dists,
+            query_indices=query_indices,
+            counts=counts,
+            consumed=consumed,
+            min_dists=min_dists,
+            heap_priorities=heap_priorities,
+            heap_indices=heap_indices,
+            data=self.data,
+            idx_array=self.idx_array,
+            idx_start=self.idx_start,
+            idx_end=self.idx_end,
+            is_leaf=self.is_leaf,
             node_data=self.node_data,
             rdist=self.rdist,
             min_max_rdist=self.min_max_rdist,
@@ -1748,17 +1682,17 @@ class BinaryTree(object):
         heap_indices = np.empty((max_heap_length,), dtype=self.int_type)
 
         min_dist = self.rejection_ifp_sample_query_prealloc(
-            rejection_r,
-            query_r,
-            start_nodes,
-            sample_indices,
-            dists,
-            query_indices,
-            counts,
-            consumed,
-            min_dists,
-            heap_priorities,
-            heap_indices,
+            rejection_r=rejection_r,
+            query_r=query_r,
+            start_nodes=start_nodes,
+            sample_indices=sample_indices,
+            dists=dists,
+            query_indices=query_indices,
+            counts=counts,
+            consumed=consumed,
+            min_dists=min_dists,
+            heap_priorities=heap_priorities,
+            heap_indices=heap_indices,
         )
 
         return IFPSampleQueryResult(

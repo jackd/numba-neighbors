@@ -1,15 +1,10 @@
-import os
-
 import matplotlib.pyplot as plt
 import numpy as np
 
 from numba_neighbors import kd_tree as kd
 
-os.environ["NUMBA_DISABLE_JIT"] = "1"
-
-
 N = 1024
-n = 256
+n = 70
 D = 2
 # rejection_r = 0.1
 query_r = 0.1
@@ -22,7 +17,7 @@ np.random.seed(124)
 data = np.random.uniform(size=(N, D)).astype(kd.FLOAT_TYPE)
 
 tree = kd.KDTree(data, leaf_size=leaf_size)
-sample_result, query_result = tree.ifp_sample_query(
+sample_result0, query_result0 = tree.ifp_sample_query(
     r2, tree.get_node_indices(), n, max_neighbors
 )
 sample_result, query_result = tree.rejection_ifp_sample_query(
@@ -31,13 +26,7 @@ sample_result, query_result = tree.rejection_ifp_sample_query(
 
 
 def vis(
-    x0,
-    sample_indices,
-    query_result,
-    small_balls=True,
-    big_balls=False,
-    labels=False,
-    aspect=1,
+    x0, sample_indices, query_result, small_balls=True, big_balls=False, labels=False,
 ):
     x1 = x0[sample_indices]
     xn = x0[query_result.indices[0, : query_result.counts[0]]]
@@ -69,5 +58,5 @@ def vis(
     ax.set_aspect(1)
 
 
-vis(data, sample_result.indices, query_result)
+vis(data, sample_result.indices, query_result, big_balls=False)
 plt.show()

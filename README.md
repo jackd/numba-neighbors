@@ -23,6 +23,23 @@ You may see performance benefits from `fastmath` by installing Intel's short vec
 conda install -c numba icc_rt
 ```
 
+## Debugging
+
+Debugging is often simpler without `jit`ting. To disable `numba`,
+
+```bash
+export NUMBA_DISABLE_JIT=1
+```
+
+and re-enable with
+
+```bash
+export NUMBA_DISABLE_JIT=0
+```
+
+Be wary of using `os.environ["NUMBA_DISABLE_JIT"] = "1"` from python code - this must be set above imports.
+
+
 ## Differences compared to Scikit-learn
 
 1. All operations are done using reduced distances. E.g. provided `KDTree` implementations use squared distances rather than actual distances both for inputs and outputs.

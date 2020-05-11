@@ -1,12 +1,7 @@
-import os
-
 import matplotlib.pyplot as plt
 import numpy as np
 
 from numba_neighbors import kd_tree as kd
-
-os.environ["NUMBA_DISABLE_JIT"] = "1"
-
 
 N = 1024
 n = N

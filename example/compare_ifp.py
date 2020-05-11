@@ -1,12 +1,7 @@
-import os
-
 import numpy as np
 
 from numba_neighbors import binary_tree as bt
 from numba_neighbors import kd_tree as kd
-
-os.environ["NUMBA_DISABLE_JIT"] = "1"
-
 
 N = 100
 n = 50
@@ -20,7 +15,7 @@ r2 = query_r ** 2
 
 np.random.seed(124)
 data = np.random.uniform(size=(N, D)).astype(kd.FLOAT_TYPE)
-# data.sort(axis=0)
+data.sort(axis=0)
 print(data)
 
 tree = kd.KDTree(data, leaf_size=leaf_size)
