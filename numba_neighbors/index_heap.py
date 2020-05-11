@@ -1,17 +1,20 @@
-from typing import Tuple, NamedTuple
+from typing import Tuple
+
 import numpy as np
-from numba import jitclass, njit
-from numba import types
+from numba import njit, types
+from numba.experimental import jitclass
 
 
-@jitclass([('priorities', types.float32[:]), ('indices', types.int64[:]),
-           ('max_length', types.int64), ('length', types.int64)])
+@jitclass(
+    [
+        ("priorities", types.float32[:]),
+        ("indices", types.int64[:]),
+        ("max_length", types.int64),
+        ("length", types.int64),
+    ]
+)
 class IndexHeap(object):
-
-    def __init__(self,
-                 priorities: np.ndarray,
-                 indices: np.ndarray,
-                 length: int = 0):
+    def __init__(self, priorities: np.ndarray, indices: np.ndarray, length: int = 0):
         self.priorities = priorities
         self.indices = indices
         self.length = length
@@ -33,7 +36,7 @@ class IndexHeap(object):
 @njit()
 def padded_index_heap(priorities, indices, max_length):
     length = priorities.size
-    assert (indices.size == length)
+    assert indices.size == length
     actual_priorities = np.empty((max_length,), dtype=priorities.dtype)
     actual_priorities[:length] = priorities
     actual_indices = np.empty((max_length,), dtype=indices.dtype)
@@ -41,28 +44,28 @@ def padded_index_heap(priorities, indices, max_length):
     return IndexHeap(actual_priorities, actual_indices, length)
 
 
-@njit(inline='always')
+@njit(inline="always")
 def _getitem(self, index):
     # assert (0 <= index)
     # assert (index < self.length)
     return self.priorities[index], self.indices[index]
 
 
-@njit(inline='always')
+@njit(inline="always")
 def _setitem(self, index, item):
     pr, val = item
     self.priorities[index] = pr
     self.indices[index] = val
 
 
-@njit(inline='always')
+@njit(inline="always")
 def _replaceitem(self, dst_index, src_index):
     """Equivalent to self._setitem(dst_index, self._getitem(src_index))."""
     self.priorities[dst_index] = self.priorities[src_index]
     self.indices[dst_index] = self.indices[src_index]
 
 
-@njit(inline='always')
+@njit(inline="always")
 def _arr_append(self, priority, value):
     # assert (self.length < self.max_length)
     self.priorities[self.length] = priority
@@ -70,7 +73,7 @@ def _arr_append(self, priority, value):
     self.length += 1
 
 
-@njit(inline='always')
+@njit(inline="always")
 def _arr_pop(self) -> Tuple:
     # assert (self.length > 0)
     self.length -= 1
@@ -79,7 +82,7 @@ def _arr_pop(self) -> Tuple:
     return priority, value
 
 
-@njit(inline='always')
+@njit(inline="always")
 def _less(self, i1: int, i2: int) -> bool:
     left = self.priorities[i1]
     right = self.priorities[i2]
@@ -89,7 +92,7 @@ def _less(self, i1: int, i2: int) -> bool:
         return left < right
 
 
-@njit(inline='always')
+@njit(inline="always")
 def _siftup(self, pos):
     endpos = self.length
     startpos = pos
@@ -111,7 +114,7 @@ def _siftup(self, pos):
     _siftdown(self, startpos, pos)
 
 
-@njit(inline='always')
+@njit(inline="always")
 def _siftdown(self, startpos, pos):
     newpr, newind = _getitem(self, pos)
     # Follow the path to the root, moving parents down until finding a place
@@ -129,7 +132,7 @@ def _siftdown(self, startpos, pos):
     self.indices[pos] = newind
 
 
-@njit(inline='always')
+@njit(inline="always")
 def _heapify(self):
     """Transform list into a heap, in-place, in O(len(x)) time."""
     n = self.length
@@ -142,7 +145,7 @@ def _heapify(self):
         _siftup(self, i)
 
 
-@njit(inline='always')
+@njit(inline="always")
 def _heappush(self, priority, value):
     """Push item onto heap, maintaining the heap invariant."""
     # if self.length == self.max_length - 1:
@@ -154,7 +157,7 @@ def _heappush(self, priority, value):
     _siftdown(self, 0, self.length - 1)
 
 
-@njit(inline='always')
+@njit(inline="always")
 def _heappop(self) -> Tuple:
     """Pop the smallest item off the heap, maintaining the heap invariant."""
     # if self.length == 0:
