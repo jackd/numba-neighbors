@@ -176,8 +176,9 @@ class KDTreeBase(bt.BinaryTree):
 
 def kdtree_spec(float_type=FLOAT_TYPE, int_type=INT_TYPE, bool_type=BOOL_TYPE):
     float_type_t = nb.from_dtype(float_type)
-    return bt.tree_spec(float_type, int_type, bool_type) + [
-        ("node_data", float_type_t[:, 2, ::1]),
+    return [
+        *bt.tree_spec(float_type, int_type, bool_type),
+        ("node_data", float_type_t[:, :, ::1]),
     ]
 
 
