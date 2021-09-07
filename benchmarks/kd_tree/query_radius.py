@@ -17,7 +17,7 @@ data = np.random.uniform(size=(N, D)).astype(kd.FLOAT_TYPE)
 X_indices = np.random.choice(N, size=n, replace=False)
 X = data[X_indices]
 
-sk_tree = sklearn.neighbors.kd_tree.KDTree(data, leaf_size=leaf_size)
+sk_tree = sklearn.neighbors._kd_tree.KDTree(data, leaf_size=leaf_size)
 
 
 @benchmark("sklearn")

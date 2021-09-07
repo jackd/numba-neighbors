@@ -21,7 +21,7 @@ def get_data():
 #     data, node_indices = get_data()
 #     n_points = node_indices.size
 #     n_features = data.shape[1]
-#     return sklearn.neighbors.kd_tree.find_node_split_dim(
+#     return sklearn.neighbors._kd_tree.find_node_split_dim(
 #         data, node_indices, n_features, n_points)
 
 

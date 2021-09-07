@@ -18,7 +18,7 @@ def get_data():
 
 def sklearn_impl():
     data = get_data()
-    sklearn.neighbors.kd_tree.simultaneous_sort(*data)
+    sklearn.neighbors._kd_tree.simultaneous_sort(*data)
     return data
 
 
