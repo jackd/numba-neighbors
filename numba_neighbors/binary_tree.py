@@ -463,6 +463,83 @@ def _update_min_dists(dists, query_indices, counts, count, min_dists):
 
 
 @nb.njit()
+def rejection_ifp_sample_query(
+    rejection_r: float,
+    query_r: float,
+    start_nodes: IntArray,
+    sample_size: int,
+    max_counts: int,
+    # ----- tree data
+    data: FloatArray,
+    idx_array: IntArray,
+    idx_start: IntArray,
+    idx_end: IntArray,
+    is_leaf: BoolArray,
+    node_data: NodeDataArray,
+    rdist: RDist,
+    min_max_rdist: MinMaxRDist,
+) -> float:
+    """
+    Rejection-iterative farthest point sampling and querying.
+
+    Results are saved in preallocated arrays.
+
+    Args:
+        rejection_r: reduced radius used in initial rejection sample.
+        query_r: reduce query radius used for subsequent IFP sampling and
+            returned neighbors.
+        start_node: int array of node indices for which data coordinates belong.
+        *tree_data: data from the input BinaryTree.
+
+    Returns:
+        minimum distance of final sampled point. All non-sampled points should
+        be within this distane of a sampled point.
+    """
+    int_type = idx_array.dtype
+    bool_type = is_leaf.dtype
+    float_type = data.dtype
+    n_data = data.shape[0]
+    sample_indices = np.full((sample_size,), n_data, dtype=int_type)
+    shape = (sample_size, max_counts)
+    dists = np.full(shape, np.inf, dtype=float_type)
+    query_indices = np.full(shape, n_data, dtype=int_type)
+    counts = np.full((sample_size,), -1, dtype=int_type)
+    consumed = np.zeros((n_data,), dtype=bool_type)
+    min_dists = np.full((n_data,), np.inf, dtype=float_type)
+
+    max_heap_length = sample_size * max_counts + n_data
+    heap_priorities = np.empty((max_heap_length,), dtype=float_type)
+    heap_indices = np.empty((max_heap_length,), dtype=int_type)
+
+    min_dist = rejection_ifp_sample_query_prealloc(
+        rejection_r=rejection_r,
+        query_r=query_r,
+        start_nodes=start_nodes,
+        sample_indices=sample_indices,
+        dists=dists,
+        query_indices=query_indices,
+        counts=counts,
+        consumed=consumed,
+        min_dists=min_dists,
+        heap_priorities=heap_priorities,
+        heap_indices=heap_indices,
+        data=data,
+        idx_array=idx_array,
+        idx_start=idx_start,
+        idx_end=idx_end,
+        is_leaf=is_leaf,
+        node_data=node_data,
+        rdist=rdist,
+        min_max_rdist=min_max_rdist,
+    )
+
+    return IFPSampleQueryResult(
+        IFPSampleResult(sample_indices, min_dists, min_dist),
+        QueryResult(dists, query_indices, counts),
+    )
+
+
+@nb.njit()
 def rejection_ifp_sample_query_prealloc(
     rejection_r: float,
     query_r: float,
@@ -510,7 +587,7 @@ def rejection_ifp_sample_query_prealloc(
         *tree_data: data from the input BinaryTree.
 
     Returns:
-        minimum distance of final sampleed point. All non-sampled points should
+        minimum distance of final sampled point. All non-sampled points should
         be within this distane of a sampled point.
     """
     # initial rejection sample
@@ -690,6 +767,64 @@ def rejection_ifp_sample_precomputed(
 
 
 @nb.njit()
+def ifp_sample_query(
+    query_r: float,
+    start_nodes: IntArray,
+    sample_size: int,
+    max_counts: int,
+    # tree data
+    data: FloatArray,
+    idx_array: IntArray,
+    idx_start: IntArray,
+    idx_end: IntArray,
+    is_leaf: BoolArray,
+    node_data: NodeDataArray,
+    rdist: RDist,
+    min_max_rdist: MinMaxRDist,
+    eps: float = 1e-8,
+) -> IFPSampleQueryResult:
+    n_data = data.shape[0]
+    int_type = idx_array.dtype
+    float_type = data.dtype
+    sample_indices = np.full((sample_size,), n_data, dtype=int_type)
+    shape = (sample_size, max_counts)
+    dists = np.full(shape, np.inf, dtype=float_type)
+    query_indices = np.full(shape, n_data, dtype=int_type)
+    counts = np.full((sample_size,), -1, dtype=int_type)
+    min_dists = np.full((n_data,), -np.inf, dtype=float_type)
+
+    # heap = list(zip(min_dists, arange(self.n_data,)))
+    heap = ih.padded_index_heap(
+        min_dists, arange(n_data, dtype=int_type), sample_size * max_counts + n_data,
+    )
+    min_dists *= -1
+    min_dist = ifp_sample_query_prealloc(
+        query_r=query_r,
+        start_nodes=start_nodes,
+        sample_indices=sample_indices,
+        dists=dists,
+        query_indices=query_indices,
+        counts=counts,
+        min_dists=min_dists,
+        heap=heap,
+        data=data,
+        idx_array=idx_array,
+        idx_start=idx_start,
+        idx_end=idx_end,
+        is_leaf=is_leaf,
+        node_data=node_data,
+        rdist=rdist,
+        min_max_rdist=min_max_rdist,
+        eps=eps,
+    )
+
+    return IFPSampleQueryResult(
+        IFPSampleResult(sample_indices, min_dists, min_dist),
+        QueryResult(dists, query_indices, counts),
+    )
+
+
+@nb.njit()
 def ifp_sample_query_prealloc(
     query_r: float,
     start_nodes: IntArray,
@@ -825,13 +960,13 @@ def rejection_sample_precomputed_prealloc(
 def rejection_sample_precomputed(
     query_indices: IntArray,
     counts: IntArray,
-    max_samples: int,
+    max_samples: Optional[int],
     int_type=INT_TYPE,
     bool_type=BOOL_TYPE,
     valid: Optional[BoolArray] = None,
 ) -> RejectionSampleResult:
     """
-    Perform rejection  sampling with precomputed sample indices.
+    Perform rejection sampling with precomputed sample indices.
 
     Args:
         query_indices: [in_size, max_neighbors] neighbors of each input point.
@@ -839,6 +974,8 @@ def rejection_sample_precomputed(
         max_samples: int, maximum number of samples to consider.
         int_type: int dtype
     """
+    if max_samples is None:
+        max_samples = counts.shape[0]
     in_size = counts.size
     sample_indices = np.full((max_samples,), -1, dtype=int_type)
     consumed = np.zeros((in_size,), dtype=bool_type)
@@ -846,6 +983,58 @@ def rejection_sample_precomputed(
         query_indices, counts, sample_indices, consumed, valid
     )
     return RejectionSampleResult(sample_indices, count)
+
+
+@nb.njit()
+def rejection_sample_query(
+    rejection_r,
+    query_r,
+    start_nodes: IntArray,
+    max_samples: int,
+    max_counts: int,
+    # --- tree data arrays below
+    data: FloatArray,
+    idx_array: IntArray,
+    idx_start: IntArray,
+    idx_end: IntArray,
+    is_leaf: BoolArray,
+    node_data: NodeDataArray,
+    rdist: RDist,
+    min_max_rdist: MinMaxRDist,
+) -> IFPSampleQueryResult:
+    n_data = data.shape[0]
+    int_type = idx_array.dtype
+    float_type = data.dtype
+    bool_type = is_leaf.dtype
+    sample_indices = np.full((max_samples,), n_data, dtype=int_type)
+    shape = (max_samples, max_counts)
+    dists = np.full(shape, np.inf, dtype=float_type)
+    query_indices = np.full(shape, n_data, dtype=int_type)
+    counts = np.full((max_samples,), -1, dtype=int_type)
+    consumed = np.zeros((n_data,), dtype=bool_type)
+    sample_count = rejection_sample_query_prealloc(
+        rejection_r,
+        query_r,
+        start_nodes,
+        sample_indices,
+        dists,
+        query_indices,
+        counts,
+        consumed,
+        data=data,
+        idx_array=idx_array,
+        idx_start=idx_start,
+        idx_end=idx_end,
+        is_leaf=is_leaf,
+        node_data=node_data,
+        rdist=rdist,
+        min_max_rdist=min_max_rdist,
+    )
+
+    return RejectionSampleQueryResult(
+        RejectionSampleResult(sample_indices, sample_count),
+        QueryResult(dists, query_indices, counts),
+    )
 
 
 @nb.njit()
@@ -991,6 +1180,45 @@ def _rejection_sample_query_single_bottom_up(
 
 
 @nb.njit(parallel=PARALLEL)
+def query_radius_bottom_up(
+    X: FloatArray,
+    r: float,
+    start_nodes: IntArray,
+    max_count: int,
+    # --- tree data below
+    data: FloatArray,
+    idx_array: IntArray,
+    idx_start: IntArray,
+    idx_end: IntArray,
+    is_leaf: BoolArray,
+    node_data: NodeDataArray,
+    rdist: RDist,
+    min_max_rdist: MinMaxRDist,
+):
+    n_queries = X.shape[0]
+    dists = np.full((n_queries, max_count), np.inf, dtype=data.dtype)
+    indices = np.full((n_queries, max_count), data.shape[0], dtype=idx_array.dtype)
+    counts = np.zeros((n_queries,), dtype=idx_start.dtype)
+    query_radius_bottom_up_prealloc(
+        X,
+        r,
+        start_nodes,
+        dists,
+        indices,
+        counts,
+        data=data,
+        idx_array=idx_array,
+        idx_start=idx_start,
+        idx_end=idx_end,
+        is_leaf=is_leaf,
+        node_data=node_data,
+        rdist=rdist,
+        min_max_rdist=min_max_rdist,
+    )
+    return QueryResult(dists, indices, counts)
+
+
+@nb.njit(parallel=PARALLEL)
 def query_radius_bottom_up_prealloc(
     X: FloatArray,
     r: float,
@@ -1104,10 +1332,51 @@ def _query_radius_single_bottom_up(
     return count
 
 
+@nb.njit()
+def query_radius(
+    X: FloatArray,
+    r: float,
+    max_count: int,
+    # ----- tree data below
+    data: FloatArray,
+    idx_array: IntArray,
+    idx_start: IntArray,
+    idx_end: IntArray,
+    is_leaf: BoolArray,
+    node_data: NodeDataArray,
+    rdist: RDist,
+    min_max_rdist: MinMaxRDist,
+):
+    n_queries, n_features = X.shape
+    n_data, n_features_ = data.shape
+    assert n_features == n_features_
+    shape = (n_queries, max_count)
+    dists = np.full(shape, np.inf, dtype=data.dtype)
+    indices = np.full(shape, n_data, dtype=idx_array.dtype)
+    counts = np.empty((n_queries,), dtype=idx_array.dtype)
+    query_radius_prealloc(
+        X,
+        r,
+        dists,
+        indices,
+        counts,
+        data,
+        idx_array,
+        idx_start,
+        idx_end,
+        is_leaf,
+        node_data,
+        rdist,
+        min_max_rdist,
+    )
+    return QueryResult(dists, indices, counts)
+
+
 @nb.njit(parallel=PARALLEL)
 def query_radius_prealloc(
     X: FloatArray,
     r: float,
+    # ----- preallocated data below
     dists: FloatArray,
     indices: IntArray,
     counts: IntArray,
@@ -1283,14 +1552,12 @@ class BinaryTree:
         (super calls aren't supported as far as I can tell).
     2. `rdist` and `min_max_rdist` are conceptually functions which would
         ordinarily be implemented as class methods and then passed into
-        jitted implementation functions. This forces the objected itself to be
+        jitted implementation functions. This forces the object itself to be
         passed into those functions, which results in very slow performance.
         Instead, we implement `rdist` and `min_max_rdist` as properties which
         return `njit`ed functions.
 
     Derived classes should implement:
-    - _create_node_data - which should return a single numpy array which is
-        used in `min_max_rdist`
     - rdist: property that returns a function that gives the reduced distance
         between two points. reduced distances are distances which preserve
         order with distance but may be easier to compute. For example,
@@ -1324,27 +1591,18 @@ class BinaryTree:
         self.n_nodes = len(self.idx_start)
         self._fill_node_data()
 
+    def get_tree_data(self) -> Tuple:
+        return (
+            self.data,
+            self.idx_array,
+            self.idx_start,
+            self.idx_end,
+            self.is_leaf,
+            self.node_data,
+        )
+
     def _fill_node_data(self):
         pass
-
-    # def __init__(self, data: FloatArray, leaf_size: int = 40):
-    #     self._init(data, leaf_size)
-
-    # def _init(self, data: FloatArray, leaf_size: int = 40):
-    #     # assert (data.dtype == self.float_type)
-    #     self.data = data
-    #     self.n_data, self.n_features = data.shape
-    #     self.leaf_size = leaf_size
-    #     (self.n_levels, self.n_nodes, self.idx_array, self.idx_start,
-    #      self.idx_end, self.is_leaf) = get_tree_data(data,
-    #                                                  leaf_size,
-    #                                                  int_type=self.int_type,
-    #                                                  bool_type=self.bool_type)
-    #     self.node_data = self._create_node_data()  # pylint: disable=assignment-from-none
-
-    # def _create_node_data(self):
-    #     return np.zeros((self.n_nodes, 0), dtype=self.float_type)
-    # raise NotImplementedError('Abstract method')
 
     @property
     def float_type(self):
@@ -1379,12 +1637,6 @@ class BinaryTree:
         member functions does.
         """
         raise NotImplementedError("Abstract method")
-
-    # def rdist(self, x, y):
-    #     raise NotImplementedError('Abstract method')
-
-    # def min_max_rdist(self, lower_bounds, upper_bounds, x, n_features):
-    #     raise NotImplementedError('Abstract method')
 
     def query_radius_prealloc(
         self,
@@ -1426,14 +1678,19 @@ class BinaryTree:
         Returns:
             QueryResult: (dists, indices, counts)
         """
-        n_queries, n_features = X.shape
-        assert n_features == self.n_features
-        shape = (n_queries, max_count)
-        dists = np.full(shape, np.inf, dtype=self.float_type)
-        indices = np.full(shape, self.n_data, dtype=self.int_type)
-        counts = np.empty((n_queries,), dtype=self.int_type)
-        self.query_radius_prealloc(X, r, dists, indices, counts)
-        return QueryResult(dists, indices, counts)
+        return query_radius(
+            X,
+            r,
+            max_count,
+            data=self.data,
+            idx_array=self.idx_array,
+            idx_start=self.idx_start,
+            idx_end=self.idx_end,
+            is_leaf=self.is_leaf,
+            node_data=self.node_data,
+            rdist=self.rdist,
+            min_max_rdist=self.min_max_rdist,
+        )
 
     def query_radius_bottom_up_prealloc(
         self,
@@ -1463,13 +1720,21 @@ class BinaryTree:
 
     def query_radius_bottom_up(
         self, X: FloatArray, r: float, start_nodes: IntArray, max_count: int
-    ):
-        n_queries = X.shape[0]
-        dists = np.full((n_queries, max_count), np.inf, dtype=self.float_type)
-        indices = np.full((n_queries, max_count), self.n_data, dtype=self.int_type)
-        counts = np.zeros((n_queries,), dtype=self.int_type)
-        self.query_radius_bottom_up_prealloc(X, r, start_nodes, dists, indices, counts)
-        return QueryResult(dists, indices, counts)
+    ) -> QueryResult:
+        return query_radius_bottom_up(
+            X,
+            r,
+            start_nodes,
+            max_count,
+            data=self.data,
+            idx_array=self.idx_array,
+            idx_start=self.idx_start,
+            idx_end=self.idx_end,
+            is_leaf=self.is_leaf,
+            node_data=self.node_data,
+            rdist=self.rdist,
+            min_max_rdist=self.min_max_rdist,
+        )
 
     def rejection_sample_query_prealloc(
         self,
@@ -1509,26 +1774,20 @@ class BinaryTree:
         max_samples: int,
         max_counts: int,
     ) -> RejectionSampleQueryResult:
-        sample_indices = np.full((max_samples,), self.n_data, dtype=self.int_type)
-        shape = (max_samples, max_counts)
-        dists = np.full(shape, np.inf, dtype=self.float_type)
-        query_indices = np.full(shape, self.n_data, dtype=self.int_type)
-        counts = np.full((max_samples,), -1, dtype=self.int_type)
-        consumed = np.zeros((self.n_data,), dtype=self.bool_type)
-        sample_count = self.rejection_sample_query_prealloc(
+        return rejection_sample_query(
             rejection_r,
             query_r,
             start_nodes,
-            sample_indices,
-            dists,
-            query_indices,
-            counts,
-            consumed,
-        )
-
-        return RejectionSampleQueryResult(
-            RejectionSampleResult(sample_indices, sample_count),
-            QueryResult(dists, query_indices, counts),
+            max_samples,
+            max_counts,
+            data=self.data,
+            idx_array=self.idx_array,
+            idx_start=self.idx_start,
+            idx_end=self.idx_end,
+            is_leaf=self.is_leaf,
+            node_data=self.node_data,
+            rdist=self.rdist,
+            min_max_rdist=self.min_max_rdist,
         )
 
     def ifp_sample_query_prealloc(
@@ -1564,36 +1823,27 @@ class BinaryTree:
         )
 
     def ifp_sample_query(
-        self, query_r: float, start_nodes: IntArray, sample_size: int, max_counts: int
+        self,
+        query_r: float,
+        start_nodes: IntArray,
+        sample_size: int,
+        max_counts: int,
+        eps: float = 1e-8,
     ) -> IFPSampleQueryResult:
-        sample_indices = np.full((sample_size,), self.n_data, dtype=self.int_type)
-        shape = (sample_size, max_counts)
-        dists = np.full(shape, np.inf, dtype=self.float_type)
-        query_indices = np.full(shape, self.n_data, dtype=self.int_type)
-        counts = np.full((sample_size,), -1, dtype=self.int_type)
-        min_dists = np.full((self.n_data,), -np.inf, dtype=self.float_type)
-
-        # heap = list(zip(min_dists, arange(self.n_data,)))
-        heap = ih.padded_index_heap(
-            min_dists,
-            arange(self.n_data, dtype=self.int_type),
-            sample_size * max_counts + self.n_data,
-        )
-        min_dists *= -1
-        min_dist = self.ifp_sample_query_prealloc(
-            query_r=query_r,
-            start_nodes=start_nodes,
-            sample_indices=sample_indices,
-            dists=dists,
-            query_indices=query_indices,
-            counts=counts,
-            min_dists=min_dists,
-            heap=heap,
-        )
-
-        return IFPSampleQueryResult(
-            IFPSampleResult(sample_indices, min_dists, min_dist),
-            QueryResult(dists, query_indices, counts),
+        return ifp_sample_query(
+            query_r,
+            start_nodes,
+            sample_size,
+            max_counts,
+            eps=eps,
+            data=self.data,
+            idx_array=self.idx_array,
+            idx_start=self.idx_start,
+            idx_end=self.idx_end,
+            is_leaf=self.is_leaf,
+            node_data=self.node_data,
+            rdist=self.rdist,
+            min_max_rdist=self.min_max_rdist,
         )
 
     def rejection_ifp_sample_query_prealloc(
@@ -1669,35 +1919,20 @@ class BinaryTree:
                     - indices
                     - counts
         """
-        sample_indices = np.full((sample_size,), self.n_data, dtype=self.int_type)
-        shape = (sample_size, max_counts)
-        dists = np.full(shape, np.inf, dtype=self.float_type)
-        query_indices = np.full(shape, self.n_data, dtype=self.int_type)
-        counts = np.full((sample_size,), -1, dtype=self.int_type)
-        consumed = np.zeros((self.n_data,), dtype=self.bool_type)
-        min_dists = np.full((self.n_data,), np.inf, dtype=self.float_type)
-
-        max_heap_length = sample_size * max_counts + self.n_data
-        heap_priorities = np.empty((max_heap_length,), dtype=self.float_type)
-        heap_indices = np.empty((max_heap_length,), dtype=self.int_type)
-
-        min_dist = self.rejection_ifp_sample_query_prealloc(
+        return rejection_ifp_sample_query(
             rejection_r=rejection_r,
             query_r=query_r,
             start_nodes=start_nodes,
-            sample_indices=sample_indices,
-            dists=dists,
-            query_indices=query_indices,
-            counts=counts,
-            consumed=consumed,
-            min_dists=min_dists,
-            heap_priorities=heap_priorities,
-            heap_indices=heap_indices,
-        )
-
-        return IFPSampleQueryResult(
-            IFPSampleResult(sample_indices, min_dists, min_dist),
-            QueryResult(dists, query_indices, counts),
+            sample_size=sample_size,
+            max_counts=max_counts,
+            data=self.data,
+            idx_array=self.idx_array,
+            idx_start=self.idx_start,
+            idx_end=self.idx_end,
+            is_leaf=self.is_leaf,
+            node_data=self.node_data,
+            rdist=self.rdist,
+            min_max_rdist=self.min_max_rdist,
         )
 
     def get_node_indices_prealloc(self, node_indices: IntArray):

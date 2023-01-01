@@ -1,7 +1,7 @@
 # os.environ['NUMBA_DISABLE_JIT'] = '1'
 import numpy as np
 
-from dcbs.np_utils.ifp.sample_query import ifp_sample_and_query
+# from dcbs.np_utils.ifp.sample_query import ifp_sample_and_query
 from numba_neighbors import kd_tree as kd
 from numba_neighbors.benchmark_utils import benchmark, run_benchmarks
 
@@ -58,11 +58,11 @@ def rejection_ifp3():
     )
 
 
-@benchmark()
-def base():
-    return ifp_sample_and_query(
-        data, query_r, sample_size, max_neighbors, max_neighbors
-    )
+# @benchmark()
+# def base():
+#     return ifp_sample_and_query(
+#         data, query_r, sample_size, max_neighbors, max_neighbors
+#     )
 
 
 run_benchmarks(20, 100)

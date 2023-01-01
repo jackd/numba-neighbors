@@ -69,7 +69,7 @@ def create_kd_tree_data(
 def fill_kd_tree_node_data(
     n_features, n_nodes, data, idx_array, idx_start, idx_end, float_type, node_data
 ):
-    """Initialize the node for the dataset stored in self.data"""
+    """Initialize the node for the dataset stored in data"""
     # node_bounds = np.empty((n_nodes, 2, n_features), dtype=float_type)
 
     node_data[:, 0] = np.inf

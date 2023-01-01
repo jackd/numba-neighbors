@@ -1,6 +1,6 @@
 import numpy as np
-import sklearn.neighbors
 
+import sklearn.neighbors
 from numba_neighbors import binary_tree as bt
 from numba_neighbors import kd_tree as kd
 from numba_neighbors.benchmark_utils import benchmark, run_benchmarks
@@ -15,17 +15,17 @@ leaf_size = 16
 
 @benchmark("sklearn")
 def sklearn_impl():
-    return sklearn.neighbors.kd_tree.KDTree(data, leaf_size=leaf_size)
+    return sklearn.neighbors.KDTree(data, leaf_size=leaf_size)
 
 
 @benchmark("base")
 def numba_impl():
-    return bt.get_tree_data(data, leaf_size=leaf_size)
+    return bt.create_tree_data(data, leaf_size=leaf_size)
 
 
 @benchmark("BinaryTree")
 def binary_tree():
-    return bt.BinaryTree(data, leaf_size=leaf_size)
+    return bt.binary_tree(data, leaf_size=leaf_size)
 
 
 @benchmark("KDTree")

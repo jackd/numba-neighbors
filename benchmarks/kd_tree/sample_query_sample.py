@@ -5,7 +5,7 @@ import heapq
 import numpy as np
 from numba import njit
 
-from dcbs.sparse.sample import ragged_in_place_and_down_sample_query_np
+# from dcbs.sparse.sample import ragged_in_place_and_down_sample_query_np
 from numba_neighbors import binary_tree as bt
 from numba_neighbors import kd_tree as kd
 from numba_neighbors.benchmark_utils import benchmark, run_benchmarks
@@ -85,26 +85,26 @@ def numba3_impl(data, leaf_size, n1, r0, r1, max_neigh0, max_neigh1):
 benchmark("numba3")(functools.partial(numba3_impl, **kwargs))
 
 
-@benchmark()
-def original():
-    (
-        ip_dists,
-        ip_indices,
-        sample_indices,
-        sample_size,
-        ds_dists,
-        ds_indices,
-    ) = ragged_in_place_and_down_sample_query_np(
-        data, n0, r0, max_neigh0, n1, r1, max_neigh1
-    )
-    q0 = bt.QueryResult(
-        ip_dists, ip_indices, np.count_nonzero(np.isfinite(ip_dists), axis=1)
-    )
-    sample = bt.RejectionSampleResult(sample_indices, sample_size)
-    q1 = bt.QueryResult(
-        ds_dists, ds_indices, np.count_nonzero(np.isfinite(ds_dists), axis=1)
-    )
-    return q0, sample, q1
+# @benchmark()
+# def original():
+#     (
+#         ip_dists,
+#         ip_indices,
+#         sample_indices,
+#         sample_size,
+#         ds_dists,
+#         ds_indices,
+#     ) = ragged_in_place_and_down_sample_query_np(
+#         data, n0, r0, max_neigh0, n1, r1, max_neigh1
+#     )
+#     q0 = bt.QueryResult(
+#         ip_dists, ip_indices, np.count_nonzero(np.isfinite(ip_dists), axis=1)
+#     )
+#     sample = bt.RejectionSampleResult(sample_indices, sample_size)
+#     q1 = bt.QueryResult(
+#         ds_dists, ds_indices, np.count_nonzero(np.isfinite(ds_dists), axis=1)
+#     )
+#     return q0, sample, q1
 
 
 run_benchmarks(20, 100)
@@ -115,10 +115,10 @@ print(s.count)
 counts = q1.counts[: s.count]
 print(np.max(counts), np.mean(counts))
 
-orig_q0, orig_s, orig_q1 = original()
-print("---")
-print(np.max(orig_q0.counts), np.mean(orig_q0.counts))
-print(orig_s.count)
-counts = orig_q1.counts[: orig_s.count]
-print(np.max(counts), np.mean(counts))
-print(orig_q1.dists.shape)
+# orig_q0, orig_s, orig_q1 = original()
+# print("---")
+# print(np.max(orig_q0.counts), np.mean(orig_q0.counts))
+# print(orig_s.count)
+# counts = orig_q1.counts[: orig_s.count]
+# print(np.max(counts), np.mean(counts))
+# print(orig_q1.dists.shape)

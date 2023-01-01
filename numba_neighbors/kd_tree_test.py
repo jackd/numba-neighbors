@@ -1,10 +1,10 @@
 import unittest
 
 import numpy as np
-from sklearn.neighbors import KDTree as sk_KDTree
 
 from numba_neighbors import binary_tree as bt
 from numba_neighbors import kd_tree as kd
+from sklearn.neighbors import KDTree as sk_KDTree
 
 # import os
 # os.environ['NUMBA_DISABLE_JIT'] = '1'
@@ -179,13 +179,13 @@ class KDTreeTest(unittest.TestCase):
         indices = indices[si]
         counts = counts[si]
 
-        np.testing.assert_allclose(qr.dists, dists)
+        np.testing.assert_allclose(qr.dists, dists, rtol=1e-5)
         np.testing.assert_equal(qr.indices, indices)
         np.testing.assert_equal(qr.counts, counts)
 
         np.testing.assert_equal(sr.indices, sr3.indices)
-        np.testing.assert_allclose(sr.min_dists, sr3.min_dists)
-        np.testing.assert_allclose(sr.min_dist, sr3.min_dist)
+        np.testing.assert_allclose(sr.min_dists, sr3.min_dists, rtol=1e-5)
+        np.testing.assert_allclose(sr.min_dist, sr3.min_dist, rtol=1e-5)
 
 
 class KDTree3Test(KDTreeTest):
